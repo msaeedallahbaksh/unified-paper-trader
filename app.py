@@ -166,14 +166,20 @@ def get_crypto_data(symbols, period="60d"):
     tickers = [f"{s}-USD" for s in symbols]
     try:
         data = yf.download(tickers, period=period, progress=False, threads=True)
+        if data is None or data.empty:
+            print(f"⚠️ Crypto data empty")
+            return None
         if isinstance(data.columns, pd.MultiIndex):
             prices = data['Close']
         else:
             prices = data[['Close']]
             prices.columns = [tickers[0]]
         prices.columns = [c.replace('-USD', '') for c in prices.columns]
-        return prices.dropna()
-    except:
+        result = prices.dropna()
+        print(f"✅ Crypto data fetched: {len(result)} rows")
+        return result
+    except Exception as e:
+        print(f"❌ Crypto data error: {e}")
         return None
 
 
@@ -181,13 +187,19 @@ def get_stock_data(symbols, period="60d"):
     """Fetch stock data."""
     try:
         data = yf.download(symbols, period=period, progress=False, threads=True)
+        if data is None or data.empty:
+            print(f"⚠️ Stock data empty for {symbols}")
+            return None
         if isinstance(data.columns, pd.MultiIndex):
             prices = data['Close']
         else:
             prices = data[['Close']]
             prices.columns = [symbols[0]] if isinstance(symbols, list) else [symbols]
-        return prices.dropna()
-    except:
+        result = prices.dropna()
+        print(f"✅ Stock data fetched: {len(result)} rows for {len(symbols)} symbols")
+        return result
+    except Exception as e:
+        print(f"❌ Stock data error: {e}")
         return None
 
 
@@ -394,9 +406,22 @@ def update_stocks():
         stocks.add(pair["stock1"])
         stocks.add(pair["stock2"])
     
+    print(f"   Fetching data for {len(stocks)} stocks...")
     prices = get_stock_data(list(stocks))
-    if prices is None or len(prices) < 30:
-        return None
+    if prices is None:
+        print("   ⚠️ Failed to fetch stock data - market may be closed")
+        # Still update timestamp so we know it tried
+        portfolio["last_update"] = datetime.now().isoformat()
+        portfolio["signals"] = []
+        save_portfolio(portfolio, "stocks")
+        return portfolio
+    
+    if len(prices) < 30:
+        print(f"   ⚠️ Insufficient data: {len(prices)} rows (need 30)")
+        portfolio["last_update"] = datetime.now().isoformat()
+        portfolio["signals"] = []
+        save_portfolio(portfolio, "stocks")
+        return portfolio
     
     signals = []
     
