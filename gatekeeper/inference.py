@@ -40,18 +40,27 @@ class Attention(nn.Module):
         return context, weights
 
 class GatekeeperLSTM(nn.Module):
-    def __init__(self, input_size=15, hidden_size=64, num_layers=2, dropout=0.3, **kwargs):
+    """V3 optimized architecture - smaller and better regularized"""
+    def __init__(self, input_size=15, hidden_size=32, num_layers=1, dropout=0.5, **kwargs):
         super().__init__()
+        self.bn_input = nn.BatchNorm1d(input_size)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True,
-                           dropout=dropout if num_layers > 1 else 0, bidirectional=True)
+                           bidirectional=True)
         self.attention = Attention(hidden_size * 2)
-        self.fc1 = nn.Linear(hidden_size * 2, hidden_size)
+        self.bn1 = nn.BatchNorm1d(hidden_size * 2)
+        self.fc1 = nn.Linear(hidden_size * 2, 16)
         self.dropout = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(hidden_size, 1)
+        self.fc2 = nn.Linear(16, 1)
     
     def forward(self, x, return_attention=False):
+        b, s, f = x.shape
+        x = x.transpose(1, 2)
+        x = self.bn_input(x)
+        x = x.transpose(1, 2)
+        
         lstm_out, _ = self.lstm(x)
         context, attn = self.attention(lstm_out)
+        context = self.bn1(context)
         out = torch.relu(self.fc1(context))
         out = self.dropout(out)
         out = torch.sigmoid(self.fc2(out))

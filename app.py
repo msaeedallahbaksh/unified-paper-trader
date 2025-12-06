@@ -24,7 +24,7 @@ from sklearn.cluster import SpectralClustering
 
 # Gatekeeper Neural Network (optional)
 GATEKEEPER_ENABLED = True
-GATEKEEPER_THRESHOLD = 0.7
+GATEKEEPER_THRESHOLD = 0.75  # V3 model: 36% precision at this threshold
 gatekeeper = None
 
 try:
