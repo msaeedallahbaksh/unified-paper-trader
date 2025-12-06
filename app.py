@@ -52,16 +52,20 @@ INITIAL_CAPITAL = 10000
 BASE_POSITION_SIZE = 0.10  # Base 10% per trade
 ZSCORE_ENTRY = 2.0
 ZSCORE_EXIT = 0.5
-UPDATE_INTERVAL = 300  # 5 minutes
-STALE_THRESHOLD = 600  # 10 minutes
+UPDATE_INTERVAL = 180  # 3 minutes (faster updates)
+STALE_THRESHOLD = 300  # 5 minutes (more responsive stale detection)
 
-# Dynamic Position Sizing (Kelly-inspired)
-# Higher confidence = larger position
+# Dynamic Position Sizing (CONSERVATIVE Kelly)
+# RULE: Never bet more than 5% on ANY trade
+# Why: A Z-score of 3.44 could be a golden setup OR a Luna collapse
+# Survive by hitting singles, not home runs
+MAX_POSITION_SIZE = 0.05  # HARD CAP: 5% max per trade (survive black swans)
+
 POSITION_TIERS = {
-    0.90: 0.20,  # 90%+ confidence: 20% of capital (Golden setup!)
-    0.85: 0.15,  # 85%+ confidence: 15% of capital
-    0.80: 0.10,  # 80%+ confidence: 10% of capital
-    0.75: 0.05,  # 75%+ confidence: 5% of capital (minimum)
+    0.90: 0.05,  # 90%+ confidence: 5% of capital (max allowed)
+    0.85: 0.04,  # 85%+ confidence: 4% of capital
+    0.80: 0.03,  # 80%+ confidence: 3% of capital
+    0.75: 0.02,  # 75%+ confidence: 2% of capital (minimum)
 }
 
 DATA_DIR = Path("data")
@@ -776,6 +780,35 @@ def get_zscore_history(market, pair):
 def start_background():
     thread = threading.Thread(target=background_updater, daemon=True)
     thread.start()
+    print("🔄 Background updater started")
+
+
+# ============================================================
+# AUTO-START FOR GUNICORN
+# This runs when gunicorn imports the module (not just __main__)
+# ============================================================
+_background_started = False
+
+def ensure_background_running():
+    """Ensure background updater is running (works with gunicorn)."""
+    global _background_started
+    if not _background_started:
+        _background_started = True
+        print("🚀 Initializing on first request...")
+        # Do initial updates
+        try:
+            update_crypto()
+            update_stocks()
+        except Exception as e:
+            print(f"⚠️ Initial update error: {e}")
+        # Start background thread
+        start_background()
+
+
+@app.before_request
+def before_first_request():
+    """Start background updater on first HTTP request."""
+    ensure_background_running()
 
 
 if __name__ == '__main__':
