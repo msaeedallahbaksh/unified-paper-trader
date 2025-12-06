@@ -584,6 +584,76 @@ def get_summary():
     })
 
 
+@app.route('/api/zscore_history/<market>/<pair>')
+def get_zscore_history(market, pair):
+    """Get z-score history for a specific pair (for charting)."""
+    parts = pair.split('-')
+    if len(parts) != 2:
+        return jsonify({"error": "Invalid pair format"}), 400
+    
+    asset1, asset2 = parts[0], parts[1]
+    
+    # Fetch historical data
+    if market == "crypto":
+        symbols = [f"{asset1}-USD", f"{asset2}-USD"]
+        try:
+            data = yf.download(symbols, period="60d", progress=False)
+            if isinstance(data.columns, pd.MultiIndex):
+                prices = data['Close']
+            else:
+                prices = data[['Close']]
+            prices.columns = [c.replace('-USD', '') for c in prices.columns]
+        except:
+            return jsonify({"error": "Failed to fetch data"}), 500
+    else:
+        symbols = [asset1, asset2]
+        try:
+            data = yf.download(symbols, period="60d", progress=False)
+            if isinstance(data.columns, pd.MultiIndex):
+                prices = data['Close']
+            else:
+                prices = data[['Close']]
+        except:
+            return jsonify({"error": "Failed to fetch data"}), 500
+    
+    prices = prices.dropna()
+    if len(prices) < 30:
+        return jsonify({"error": "Insufficient data"}), 500
+    
+    # Calculate z-scores
+    y = prices[asset1].values
+    x = prices[asset2].values
+    
+    # OLS for hedge ratio
+    x_const = add_constant(x)
+    model = OLS(y, x_const).fit()
+    hedge_ratio = model.params[1]
+    
+    # Spread and rolling z-score
+    spread = y - hedge_ratio * x
+    spread_series = pd.Series(spread, index=prices.index)
+    rolling_mean = spread_series.rolling(window=30).mean()
+    rolling_std = spread_series.rolling(window=30).std()
+    zscore = (spread_series - rolling_mean) / rolling_std
+    
+    # Prepare response
+    zscore_data = []
+    for i, (date, z) in enumerate(zscore.items()):
+        if not pd.isna(z):
+            zscore_data.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "zscore": float(z)
+            })
+    
+    return jsonify({
+        "pair": pair,
+        "market": market,
+        "hedge_ratio": float(hedge_ratio),
+        "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
+        "data": zscore_data[-30:]  # Last 30 days
+    })
+
+
 # Start background updater
 def start_background():
     thread = threading.Thread(target=background_updater, daemon=True)

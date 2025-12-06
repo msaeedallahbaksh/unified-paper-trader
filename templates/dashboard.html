@@ -357,6 +357,7 @@
     </style>
 </head>
 <body>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <div class="container">
         <header>
             <h1>🚀 Unified Trading Dashboard</h1>
@@ -481,6 +482,22 @@
                 <span><span class="status-dot" id="stocks-status-dot"></span><span id="stocks-status">Live</span></span>
                 <span>🔄 Last: <span id="stocks-last-update">--</span></span>
             </div>
+        </div>
+
+        <!-- Z-Score Chart Section -->
+        <div class="section" style="margin-top: 25px;">
+            <h3 class="section-title">📈 Z-Score Monitor</h3>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <select id="chart-market" onchange="updatePairOptions()" style="padding: 10px 15px; border-radius: 8px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); cursor: pointer;">
+                    <option value="crypto">₿ Crypto</option>
+                    <option value="stocks">📈 Stocks</option>
+                </select>
+                <select id="chart-pair" onchange="loadZscoreChart()" style="padding: 10px 15px; border-radius: 8px; background: var(--bg-dark); color: var(--text-primary); border: 1px solid var(--border); cursor: pointer; min-width: 150px;">
+                    <option value="">Select a pair...</option>
+                </select>
+                <span id="chart-current-z" style="padding: 10px 15px; background: var(--bg-dark); border-radius: 8px; font-family: 'JetBrains Mono', monospace;">Current Z: --</span>
+            </div>
+            <div id="zscore-chart" style="width: 100%; height: 350px; background: var(--bg-dark); border-radius: 12px;"></div>
         </div>
 
         <div class="actions">
@@ -653,6 +670,135 @@
                 await loadAllData();
             }
         }
+
+        // Pair options for chart
+        const cryptoPairs = ['ETC-BCH', 'SHIB-BCH', 'XRP-XLM', 'LTC-XLM', 'ETC-XLM', 'SHIB-XLM', 'ETC-AAVE', 'SHIB-AAVE'];
+        const stockPairs = ['MA-V', 'HD-LOW', 'COP-EOG', 'GS-JPM', 'CVX-XOM', 'DUK-SO', 'LMT-NOC', 'KO-PEP', 'GOOGL-META', 'AAPL-MSFT'];
+
+        function updatePairOptions() {
+            const market = document.getElementById('chart-market').value;
+            const pairSelect = document.getElementById('chart-pair');
+            const pairs = market === 'crypto' ? cryptoPairs : stockPairs;
+            
+            pairSelect.innerHTML = '<option value="">Select a pair...</option>';
+            pairs.forEach(pair => {
+                pairSelect.innerHTML += `<option value="${pair}">${pair}</option>`;
+            });
+        }
+
+        async function loadZscoreChart() {
+            const market = document.getElementById('chart-market').value;
+            const pair = document.getElementById('chart-pair').value;
+            
+            if (!pair) {
+                // Show empty chart
+                Plotly.newPlot('zscore-chart', [], {
+                    paper_bgcolor: '#0d0d12',
+                    plot_bgcolor: '#0d0d12',
+                    font: { color: '#8b8b9e' },
+                    margin: { t: 30, r: 30, b: 50, l: 50 },
+                    xaxis: { gridcolor: '#2a2a3a' },
+                    yaxis: { gridcolor: '#2a2a3a', range: [-4, 4] }
+                });
+                return;
+            }
+
+            document.getElementById('chart-current-z').textContent = 'Loading...';
+
+            try {
+                const res = await fetch(`/api/zscore_history/${market}/${pair}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    console.error(data.error);
+                    return;
+                }
+
+                const dates = data.data.map(d => d.date);
+                const zscores = data.data.map(d => d.zscore);
+
+                // Z-score line
+                const zscore_trace = {
+                    x: dates,
+                    y: zscores,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Z-Score',
+                    line: { color: '#4da6ff', width: 2 }
+                };
+
+                // +2 threshold line (SELL)
+                const upper_threshold = {
+                    x: dates,
+                    y: dates.map(() => 2),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'SELL (+2)',
+                    line: { color: '#ff4757', width: 2, dash: 'dash' }
+                };
+
+                // -2 threshold line (BUY)
+                const lower_threshold = {
+                    x: dates,
+                    y: dates.map(() => -2),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'BUY (-2)',
+                    line: { color: '#00ff88', width: 2, dash: 'dash' }
+                };
+
+                // Zero line
+                const zero_line = {
+                    x: dates,
+                    y: dates.map(() => 0),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Mean',
+                    line: { color: '#8b8b9e', width: 1, dash: 'dot' }
+                };
+
+                const layout = {
+                    paper_bgcolor: '#0d0d12',
+                    plot_bgcolor: '#16161f',
+                    font: { color: '#ffffff', family: 'Outfit, sans-serif' },
+                    margin: { t: 30, r: 30, b: 50, l: 50 },
+                    xaxis: { 
+                        gridcolor: '#2a2a3a',
+                        tickangle: -45
+                    },
+                    yaxis: { 
+                        gridcolor: '#2a2a3a',
+                        range: [-4, 4],
+                        title: 'Z-Score'
+                    },
+                    legend: {
+                        orientation: 'h',
+                        y: -0.2
+                    },
+                    showlegend: true
+                };
+
+                Plotly.newPlot('zscore-chart', [zscore_trace, upper_threshold, lower_threshold, zero_line], layout, {responsive: true});
+
+                // Update current z-score display
+                const currentZ = data.current_zscore;
+                const zEl = document.getElementById('chart-current-z');
+                zEl.textContent = `Current Z: ${currentZ.toFixed(2)}`;
+                if (currentZ > 2) {
+                    zEl.style.color = '#ff4757';
+                } else if (currentZ < -2) {
+                    zEl.style.color = '#00ff88';
+                } else {
+                    zEl.style.color = '#4da6ff';
+                }
+
+            } catch (error) {
+                console.error('Error loading z-score chart:', error);
+            }
+        }
+
+        // Initialize chart pair options
+        updatePairOptions();
 
         // Initial load
         loadAllData();
