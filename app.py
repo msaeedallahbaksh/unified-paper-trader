@@ -24,7 +24,7 @@ from sklearn.cluster import SpectralClustering
 
 # Gatekeeper Neural Network (optional)
 GATEKEEPER_ENABLED = True
-GATEKEEPER_THRESHOLD = 0.75  # V3 model: 36% precision at this threshold
+GATEKEEPER_THRESHOLD = 0.85  # V3 model: 62.5% precision - Sniper mode, not machine gunner
 gatekeeper = None
 
 try:
@@ -49,11 +49,20 @@ app = Flask(__name__)
 # CONFIGURATION
 # ============================================================
 INITIAL_CAPITAL = 10000
-POSITION_SIZE = 0.15  # 15% per trade
+BASE_POSITION_SIZE = 0.10  # Base 10% per trade
 ZSCORE_ENTRY = 2.0
 ZSCORE_EXIT = 0.5
 UPDATE_INTERVAL = 300  # 5 minutes
 STALE_THRESHOLD = 600  # 10 minutes
+
+# Dynamic Position Sizing (Kelly-inspired)
+# Higher confidence = larger position
+POSITION_TIERS = {
+    0.90: 0.20,  # 90%+ confidence: 20% of capital (Golden setup!)
+    0.85: 0.15,  # 85%+ confidence: 15% of capital
+    0.80: 0.10,  # 80%+ confidence: 10% of capital
+    0.75: 0.05,  # 75%+ confidence: 5% of capital (minimum)
+}
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -313,8 +322,21 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
         return True, 0.5, f"Gatekeeper error: {str(e)[:30]}"
 
 
+def get_position_size(confidence: float, portfolio_cash: float) -> float:
+    """
+    Dynamic position sizing based on model confidence (Kelly-inspired).
+    
+    Higher confidence = larger position.
+    Sniper mode: Only take high-confidence shots with appropriate size.
+    """
+    for threshold, size_pct in sorted(POSITION_TIERS.items(), reverse=True):
+        if confidence >= threshold:
+            return portfolio_cash * size_pct
+    return portfolio_cash * BASE_POSITION_SIZE  # Fallback
+
+
 def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge_ratio, market):
-    """Execute a paper trade."""
+    """Execute a paper trade with dynamic position sizing."""
     trade_record = {
         "time": datetime.now().isoformat(),
         "pair": pair_key,
@@ -327,11 +349,14 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         "reason": f"Z={zscore:.2f} | Hedge={hedge_ratio:.4f}"
     }
     
+    gk_confidence = 0.5  # Default confidence
+    
     # Check Gatekeeper for new positions (not for closing)
     if trade_type in ["BUY_SPREAD", "SELL_SPREAD"] and GATEKEEPER_ENABLED:
         approved, prob, gk_reason = check_gatekeeper(
             pair_key, zscore, prices, hedge_ratio, market
         )
+        gk_confidence = prob
         trade_record["gatekeeper_prob"] = prob
         trade_record["gatekeeper_approved"] = approved
         
@@ -343,10 +368,12 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
             return portfolio, trades
     
     if trade_type in ["BUY_SPREAD", "SELL_SPREAD"]:
-        position_value = portfolio["cash"] * POSITION_SIZE
+        # Dynamic position sizing based on Gatekeeper confidence
+        position_value = get_position_size(gk_confidence, portfolio["cash"])
         if position_value < 100:
             return portfolio, trades
         
+        trade_record["position_tier"] = f"Conf={gk_confidence:.2f} -> ${position_value:.0f}"
         spread_value = prices["price1"] - hedge_ratio * prices["price2"]
         
         portfolio["positions"][pair_key] = {
