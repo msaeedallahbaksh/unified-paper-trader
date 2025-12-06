@@ -24,7 +24,7 @@ from sklearn.cluster import SpectralClustering
 
 # Gatekeeper Neural Network (optional)
 GATEKEEPER_ENABLED = True
-GATEKEEPER_THRESHOLD = 0.85  # V3 model: 62.5% precision - Sniper mode, not machine gunner
+GATEKEEPER_THRESHOLD = 0.70  # V4 model with Focal Loss - balanced threshold
 gatekeeper = None
 
 try:
@@ -42,6 +42,19 @@ except ImportError as e:
 except Exception as e:
     print(f"⚠️ Error loading Gatekeeper: {e}")
     GATEKEEPER_ENABLED = False
+
+# Circuit Breaker for Hybrid Gatekeeper Mode
+# Normal Market (VIX < 20): Gatekeeper OFF → Maximize profit
+# Stress Market (VIX > 20): Gatekeeper ON → Safety mode
+circuit_breaker = None
+try:
+    from circuit_breaker import CircuitBreaker
+    circuit_breaker = CircuitBreaker()
+    print("🚨 Circuit Breaker loaded - Hybrid mode enabled!")
+except ImportError:
+    print("⚠️ Circuit Breaker not available - Gatekeeper always on")
+except Exception as e:
+    print(f"⚠️ Error loading Circuit Breaker: {e}")
 
 app = Flask(__name__)
 
@@ -305,9 +318,32 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
     """
     Check if the Gatekeeper Neural Network approves this trade.
     
+    HYBRID MODE (Circuit Breaker):
+    - Normal Market (VIX < 20): Gatekeeper OFF → Full speed
+    - Stress Market (VIX > 20 or BTC crash): Gatekeeper ON → Safety mode
+    
     Returns:
         (approved, probability, reason)
     """
+    # Check Circuit Breaker first
+    if circuit_breaker is not None:
+        cb_status = circuit_breaker.check_conditions()
+        
+        if not cb_status['gatekeeper_enabled']:
+            # Normal market - Gatekeeper OFF, full speed mode
+            return True, 1.0, "🟢 NORMAL MARKET - Full Speed"
+        else:
+            # Stress market - Gatekeeper ON, safety mode
+            triggers = ', '.join(cb_status['triggers'][:2])  # First 2 triggers
+            
+            if not GATEKEEPER_ENABLED or gatekeeper is None:
+                # No Gatekeeper available, but market is stressed
+                # Be conservative - reject high z-score trades
+                if abs(zscore) > 3.0:
+                    return False, 0.3, f"🔴 STRESS ({triggers}) - Extreme Z blocked"
+                return True, 0.6, f"🟡 STRESS ({triggers}) - No NN, allowing moderate Z"
+    
+    # Gatekeeper check (when enabled by circuit breaker or no circuit breaker)
     if not GATEKEEPER_ENABLED or gatekeeper is None:
         return True, 1.0, "Gatekeeper disabled"
     
@@ -319,11 +355,16 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
         ) if hasattr(gatekeeper, 'predict_probability') else 0.5
         
         approved = prob > GATEKEEPER_THRESHOLD
-        reason = f"NN Prob={prob:.2f}" if approved else f"BLOCKED (prob={prob:.2f})"
+        
+        if approved:
+            reason = f"🔴 STRESS - NN Approved (prob={prob:.2f})"
+        else:
+            reason = f"🔴 STRESS - NN BLOCKED (prob={prob:.2f})"
+        
         return approved, prob, reason
     except Exception as e:
-        # If Gatekeeper fails, allow trade (fail-safe)
-        return True, 0.5, f"Gatekeeper error: {str(e)[:30]}"
+        # If Gatekeeper fails, be conservative in stress mode
+        return abs(zscore) < 3.0, 0.5, f"🟡 NN Error, allowing moderate Z"
 
 
 def get_position_size(confidence: float, portfolio_cash: float) -> float:
@@ -774,6 +815,58 @@ def get_zscore_history(market, pair):
         "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
         "data": zscore_data[-30:]  # Last 30 days
     })
+
+
+@app.route('/api/circuit_breaker')
+def get_circuit_breaker_status():
+    """
+    Get Circuit Breaker status.
+    
+    The Hybrid System:
+    - Normal Market (VIX < 20): Gatekeeper OFF → Maximize profit
+    - Stress Market (VIX > 20 or crash): Gatekeeper ON → Safety mode
+    """
+    if circuit_breaker is None:
+        return jsonify({
+            "available": False,
+            "gatekeeper_enabled": GATEKEEPER_ENABLED,
+            "status": "Circuit Breaker not loaded",
+            "mode": "ALWAYS_ON" if GATEKEEPER_ENABLED else "ALWAYS_OFF"
+        })
+    
+    status = circuit_breaker.check_conditions()
+    
+    return jsonify({
+        "available": True,
+        "gatekeeper_enabled": status['gatekeeper_enabled'],
+        "market_status": status['market_status'],
+        "triggers": status['triggers'],
+        "details": status['details'],
+        "mode": "HYBRID",
+        "status_string": circuit_breaker.get_status_string()
+    })
+
+
+@app.route('/api/circuit_breaker/override', methods=['POST'])
+def override_circuit_breaker():
+    """Manually override Circuit Breaker (force Gatekeeper on/off)."""
+    if circuit_breaker is None:
+        return jsonify({"error": "Circuit Breaker not available"}), 400
+    
+    data = request.get_json() or {}
+    action = data.get('action', 'auto')
+    
+    if action == 'on':
+        circuit_breaker.force_gatekeeper(True)
+        return jsonify({"status": "Gatekeeper forced ON"})
+    elif action == 'off':
+        circuit_breaker.force_gatekeeper(False)
+        return jsonify({"status": "Gatekeeper forced OFF"})
+    elif action == 'auto':
+        circuit_breaker.reset_override()
+        return jsonify({"status": "Gatekeeper reset to AUTO mode"})
+    else:
+        return jsonify({"error": "Invalid action. Use: on, off, auto"}), 400
 
 
 # Start background updater
