@@ -24,15 +24,13 @@ import os
 
 import torch.nn as nn
 
-# Simplified model matching training
+# V4 model architecture (trained with Focal Loss)
 class Attention(nn.Module):
+    """Simple attention - matches V4 training architecture."""
     def __init__(self, hidden_size):
         super().__init__()
-        self.attention = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.Tanh(),
-            nn.Linear(hidden_size // 2, 1),
-        )
+        self.attention = nn.Linear(hidden_size, 1)
+    
     def forward(self, lstm_output):
         scores = self.attention(lstm_output).squeeze(-1)
         weights = torch.softmax(scores, dim=1)
@@ -70,14 +68,26 @@ class GatekeeperLSTM(nn.Module):
 
 def load_model(path: str, device: str = 'cpu') -> GatekeeperLSTM:
     """Load a trained model from disk."""
-    checkpoint = torch.load(path, map_location=device)
-    config = checkpoint['config']
-    model = GatekeeperLSTM(
-        input_size=config['input_size'],
-        hidden_size=config.get('hidden_size', 64),
-        num_layers=config.get('num_layers', 2),
-        dropout=config.get('dropout', 0.3)
-    )
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    
+    # V4 checkpoint format (simpler)
+    if 'config' in checkpoint:
+        config = checkpoint['config']
+        model = GatekeeperLSTM(
+            input_size=config['input_size'],
+            hidden_size=config.get('hidden_size', 64),
+            num_layers=config.get('num_layers', 2),
+            dropout=config.get('dropout', 0.3)
+        )
+    else:
+        # V4 uses fixed architecture
+        model = GatekeeperLSTM(
+            input_size=15,
+            hidden_size=32,
+            num_layers=1,
+            dropout=0.4
+        )
+    
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()
