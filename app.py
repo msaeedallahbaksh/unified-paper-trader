@@ -46,6 +46,8 @@ CRYPTO_PAIRS = [
     {"coin1": "SHIB", "coin2": "XLM", "pvalue": 0.004},
     {"coin1": "ETC", "coin2": "AAVE", "pvalue": 0.00001},
     {"coin1": "SHIB", "coin2": "AAVE", "pvalue": 0.0003},
+    # Migrated from old paper trader
+    {"coin1": "DOGE", "coin2": "LINK", "pvalue": 0.01},
 ]
 
 # ============================================================
