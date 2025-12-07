@@ -178,10 +178,58 @@ class KalmanFilter:
 
 
 # ============================================================
-# PORTFOLIO MANAGEMENT
+# PORTFOLIO MANAGEMENT (Database-backed with JSON fallback)
 # ============================================================
+try:
+    from database import (
+        get_portfolio as db_get_portfolio,
+        update_portfolio_cash as db_update_cash,
+        update_last_update as db_update_last_update,
+        add_position as db_add_position,
+        remove_position as db_remove_position,
+        add_trade as db_add_trade,
+        get_recent_trades as db_get_trades,
+        update_signal as db_update_signal,
+        clear_signals as db_clear_signals,
+        DATABASE_AVAILABLE
+    )
+    USE_DATABASE = DATABASE_AVAILABLE
+    print(f"📊 Database module loaded (Available: {DATABASE_AVAILABLE})")
+except ImportError as e:
+    print(f"⚠️ Database module not available: {e}")
+    USE_DATABASE = False
+
+
 def load_portfolio(market="crypto"):
-    """Load portfolio state."""
+    """Load portfolio state from database or JSON."""
+    if USE_DATABASE:
+        try:
+            db_data = db_get_portfolio(market)
+            # Convert to app format
+            positions = {}
+            for pair, pos in db_data.get('positions', {}).items():
+                positions[pair] = {
+                    'type': pos.get('type', pos.get('position_type')),
+                    'entry_zscore': pos.get('entry_zscore', 0),
+                    'entry_spread': pos.get('entry_price', 0),
+                    'hedge_ratio': pos.get('hedge_ratio', 0),
+                    'entry_prices': pos.get('entry_prices', {}),
+                    'entry_time': pos.get('entry_time'),
+                    'position_value': pos.get('size', pos.get('position_value', 0))
+                }
+            return {
+                "cash": db_data.get('cash', INITIAL_CAPITAL),
+                "positions": positions,
+                "start_time": db_data.get('created_at', datetime.now().isoformat()),
+                "total_value": db_data.get('cash', INITIAL_CAPITAL) + sum(p.get('position_value', p.get('size', 0)) for p in positions.values()),
+                "last_update": db_data.get('last_update'),
+                "market": market,
+                "signals": db_data.get('signals', [])
+            }
+        except Exception as e:
+            print(f"⚠️ Database load failed, falling back to JSON: {e}")
+    
+    # JSON fallback
     file = DATA_DIR / f"portfolio_{market}.json"
     if file.exists():
         with open(file, 'r') as f:
@@ -197,13 +245,31 @@ def load_portfolio(market="crypto"):
 
 
 def save_portfolio(portfolio, market="crypto"):
-    """Save portfolio state."""
+    """Save portfolio state to database and JSON."""
+    if USE_DATABASE:
+        try:
+            # Update cash
+            db_update_cash(market, portfolio.get('cash', INITIAL_CAPITAL))
+            
+            # Note: Positions are saved separately via db_add_position/db_remove_position
+            # This is handled in execute_trade
+        except Exception as e:
+            print(f"⚠️ Database save failed: {e}")
+    
+    # Always save to JSON as backup
     with open(DATA_DIR / f"portfolio_{market}.json", 'w') as f:
         json.dump(portfolio, f, indent=2, default=str)
 
 
 def load_trades(market="crypto"):
-    """Load trade history."""
+    """Load trade history from database or JSON."""
+    if USE_DATABASE:
+        try:
+            return db_get_trades(market, limit=100)
+        except Exception as e:
+            print(f"⚠️ Database trades load failed: {e}")
+    
+    # JSON fallback
     file = DATA_DIR / f"trades_{market}.json"
     if file.exists():
         with open(file, 'r') as f:
@@ -212,7 +278,8 @@ def load_trades(market="crypto"):
 
 
 def save_trades(trades, market="crypto"):
-    """Save trade history."""
+    """Save trade history - database saves happen in execute_trade."""
+    # Always save to JSON as backup
     with open(DATA_DIR / f"trades_{market}.json", 'w') as f:
         json.dump(trades, f, indent=2, default=str)
 
@@ -443,6 +510,18 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         trade_record["position_value"] = position_value
         trade_record["action"] = "OPEN"
         
+        # Save to database
+        if USE_DATABASE:
+            try:
+                db_add_position(market, pair_key, trade_type, float(spread_value), 
+                               float(zscore), float(hedge_ratio), position_value)
+                db_update_cash(market, portfolio["cash"])
+                db_add_trade(market, pair_key, trade_type, float(zscore), float(hedge_ratio),
+                            float(spread_value), prices, trade_record.get("reason", ""),
+                            pnl=None, gatekeeper_prob=gk_confidence)
+            except Exception as e:
+                print(f"⚠️ Database save error: {e}")
+        
     elif trade_type == "CLOSE":
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
@@ -464,6 +543,17 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
             trade_record["entry_zscore"] = pos["entry_zscore"]
             
             del portfolio["positions"][pair_key]
+            
+            # Save to database
+            if USE_DATABASE:
+                try:
+                    db_remove_position(market, pair_key)
+                    db_update_cash(market, portfolio["cash"])
+                    db_add_trade(market, pair_key, "CLOSE", float(zscore), float(hedge_ratio),
+                                float(exit_spread), prices, f"Closed: PnL=${pnl:.2f}",
+                                pnl=pnl, gatekeeper_prob=None)
+                except Exception as e:
+                    print(f"⚠️ Database save error: {e}")
     
     trades.append(trade_record)
     return portfolio, trades
