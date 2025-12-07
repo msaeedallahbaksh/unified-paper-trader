@@ -341,8 +341,11 @@
         .health-banner.show { display: block; }
 
         /* Responsive */
+        @media (max-width: 1100px) {
+            .metrics-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        }
         @media (max-width: 900px) {
-            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
             .grid-2 { grid-template-columns: 1fr; }
             .summary-bar { grid-template-columns: 1fr; }
         }
@@ -400,21 +403,25 @@
 
         <!-- Crypto Content -->
         <div class="content active" id="content-crypto">
-            <div class="metrics-grid">
+            <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
                 <div class="metric-card">
-                    <div class="metric-label">💰 Portfolio Value</div>
+                    <div class="metric-label">💰 TOTAL VALUE</div>
                     <div class="metric-value" id="crypto-total">$10,000</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">💵 CASH</div>
+                    <div class="metric-value" id="crypto-cash" style="color: var(--accent-green);">$10,000</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">📊 P&L</div>
                     <div class="metric-value" id="crypto-pnl-detail">$0.00</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">🎯 Win Rate</div>
+                    <div class="metric-label">🎯 WIN RATE</div>
                     <div class="metric-value" id="crypto-winrate">0%</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">📈 Trades</div>
+                    <div class="metric-label">📈 TRADES</div>
                     <div class="metric-value" id="crypto-trades">0</div>
                 </div>
             </div>
@@ -443,21 +450,25 @@
 
         <!-- Stocks Content -->
         <div class="content" id="content-stocks">
-            <div class="metrics-grid">
+            <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
                 <div class="metric-card">
-                    <div class="metric-label">💰 Portfolio Value</div>
+                    <div class="metric-label">💰 TOTAL VALUE</div>
                     <div class="metric-value" id="stocks-total">$10,000</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">💵 CASH</div>
+                    <div class="metric-value" id="stocks-cash" style="color: var(--accent-green);">$10,000</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">📊 P&L</div>
                     <div class="metric-value" id="stocks-pnl-detail">$0.00</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">🎯 Win Rate</div>
+                    <div class="metric-label">🎯 WIN RATE</div>
                     <div class="metric-value" id="stocks-winrate">0%</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">📈 Trades</div>
+                    <div class="metric-label">📈 TRADES</div>
                     <div class="metric-value" id="stocks-trades">0</div>
                 </div>
             </div>
@@ -580,6 +591,7 @@
 
             // Metrics
             document.getElementById(`${prefix}-total`).textContent = formatCurrency(data.total_value);
+            document.getElementById(`${prefix}-cash`).textContent = formatCurrency(data.cash);
             const pnlEl = document.getElementById(`${prefix}-pnl-detail`);
             pnlEl.textContent = `${data.pnl >= 0 ? '+' : ''}${formatCurrency(data.pnl)} (${data.pnl_pct.toFixed(2)}%)`;
             pnlEl.className = `metric-value ${data.pnl >= 0 ? 'positive' : 'negative'}`;
