@@ -22,6 +22,15 @@ from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
 from sklearn.cluster import SpectralClustering
 
+# Database Module (Supabase with JSON fallback)
+try:
+    from database import init_database, get_storage_mode, DATABASE_AVAILABLE
+    init_database()
+    print(f"📊 Storage mode: {get_storage_mode()}")
+except Exception as e:
+    print(f"⚠️ Database module not available: {e}")
+    DATABASE_AVAILABLE = False
+
 # Gatekeeper Neural Network (optional)
 GATEKEEPER_ENABLED = True
 GATEKEEPER_THRESHOLD = 0.70  # V4 model with Focal Loss - balanced threshold
