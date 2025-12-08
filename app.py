@@ -31,26 +31,38 @@ except Exception as e:
     print(f"⚠️ Database module not available: {e}")
     DATABASE_AVAILABLE = False
 
-# Gatekeeper Neural Network (optional)
+# Gatekeeper Neural Network (LAZY LOADED to reduce memory)
+# Only loads when actually checking trades
 GATEKEEPER_ENABLED = True
 GATEKEEPER_THRESHOLD = 0.70  # V4 model with Focal Loss - balanced threshold
-gatekeeper = None
+_gatekeeper = None  # Lazy loaded
+_gatekeeper_path = Path(__file__).parent / "gatekeeper" / "gatekeeper.pth"
+_gatekeeper_available = _gatekeeper_path.exists()
 
-try:
-    from gatekeeper import Gatekeeper
-    gatekeeper_path = Path(__file__).parent / "gatekeeper" / "gatekeeper.pth"
-    if gatekeeper_path.exists():
-        gatekeeper = Gatekeeper(str(gatekeeper_path), threshold=GATEKEEPER_THRESHOLD)
-        print("🧠 Gatekeeper Neural Network loaded!")
-    else:
-        print("⚠️ Gatekeeper model not found - running without NN filter")
-        GATEKEEPER_ENABLED = False
-except ImportError as e:
-    print(f"⚠️ Gatekeeper not available: {e}")
+if _gatekeeper_available:
+    print("🧠 Gatekeeper model found - will lazy-load when needed")
+else:
+    print("⚠️ Gatekeeper model not found - running without NN filter")
     GATEKEEPER_ENABLED = False
-except Exception as e:
-    print(f"⚠️ Error loading Gatekeeper: {e}")
-    GATEKEEPER_ENABLED = False
+
+
+def get_gatekeeper():
+    """Lazy-load Gatekeeper to reduce memory usage on startup."""
+    global _gatekeeper
+    
+    if not GATEKEEPER_ENABLED or not _gatekeeper_available:
+        return None
+    
+    if _gatekeeper is None:
+        try:
+            from gatekeeper import Gatekeeper
+            _gatekeeper = Gatekeeper(str(_gatekeeper_path), threshold=GATEKEEPER_THRESHOLD)
+            print("🧠 Gatekeeper loaded on-demand")
+        except Exception as e:
+            print(f"⚠️ Failed to load Gatekeeper: {e}")
+            return None
+    
+    return _gatekeeper
 
 # Circuit Breaker for Hybrid Gatekeeper Mode
 # Normal Market (VIX < 20): Gatekeeper OFF → Maximize profit
@@ -275,7 +287,7 @@ def load_portfolio(market="crypto"):
     if USE_DATABASE:
         try:
             db_data = db_get_portfolio(market)
-            # Convert to app format
+            # Convert positions to app format
             positions = {}
             for pair, pos in db_data.get('positions', {}).items():
                 positions[pair] = {
@@ -287,6 +299,25 @@ def load_portfolio(market="crypto"):
                     'entry_time': pos.get('entry_time'),
                     'position_value': pos.get('size', pos.get('position_value', 0))
                 }
+            
+            # Convert signals dict to list format for frontend
+            db_signals = db_data.get('signals', {})
+            if isinstance(db_signals, dict):
+                signals = [
+                    {
+                        'pair': pair,
+                        'action': sig.get('signal', 'NO_SIGNAL'),
+                        'zscore': sig.get('zscore', 0),
+                        'prices': sig.get('prices', {}),
+                        'method': 'Kalman' if market == 'stocks' else 'OLS',
+                        'gatekeeper_approved': sig.get('gatekeeper_approved', True),
+                        'gatekeeper_reason': sig.get('gatekeeper_reason')
+                    }
+                    for pair, sig in db_signals.items()
+                ]
+            else:
+                signals = db_signals or []
+            
             return {
                 "cash": db_data.get('cash', INITIAL_CAPITAL),
                 "positions": positions,
@@ -294,7 +325,7 @@ def load_portfolio(market="crypto"):
                 "total_value": db_data.get('cash', INITIAL_CAPITAL) + sum(p.get('position_value', p.get('size', 0)) for p in positions.values()),
                 "last_update": db_data.get('last_update'),
                 "market": market,
-                "signals": db_data.get('signals', [])
+                "signals": signals
             }
         except Exception as e:
             print(f"⚠️ Database load failed, falling back to JSON: {e}")
@@ -481,8 +512,9 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
         else:
             # Stress market - Gatekeeper ON, safety mode
             triggers = ', '.join(cb_status['triggers'][:2])  # First 2 triggers
+            gk = get_gatekeeper()  # Lazy load Gatekeeper only when needed
             
-            if not GATEKEEPER_ENABLED or gatekeeper is None:
+            if not GATEKEEPER_ENABLED or gk is None:
                 # No Gatekeeper available, but market is stressed
                 # Be conservative - reject high z-score trades
                 if abs(zscore) > 3.0:
@@ -490,15 +522,16 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
                 return True, 0.6, f"🟡 STRESS ({triggers}) - No NN, allowing moderate Z"
     
     # Gatekeeper check (when enabled by circuit breaker or no circuit breaker)
-    if not GATEKEEPER_ENABLED or gatekeeper is None:
+    gk = get_gatekeeper()  # Lazy load
+    if not GATEKEEPER_ENABLED or gk is None:
         return True, 1.0, "Gatekeeper disabled"
     
     try:
         # For now, use a simplified check based on z-score magnitude
         # Full integration would pass the feature sequence
-        prob = gatekeeper.predict_probability(
+        prob = gk.predict_probability(
             np.random.randn(1, 50, 15)  # Placeholder - would use real features
-        ) if hasattr(gatekeeper, 'predict_probability') else 0.5
+        ) if hasattr(gk, 'predict_probability') else 0.5
         
         approved = prob > GATEKEEPER_THRESHOLD
         
@@ -553,6 +586,7 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         
         if not approved:
             # Log the blocked trade but don't execute
+            print(f"   🚫 BLOCKED {pair_key}: {gk_reason}")
             trade_record["action"] = "BLOCKED_BY_GATEKEEPER"
             trade_record["reason"] += f" | {gk_reason}"
             trades.append(trade_record)
@@ -562,7 +596,10 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         # Dynamic position sizing based on Gatekeeper confidence
         position_value = get_position_size(gk_confidence, portfolio["cash"])
         if position_value < 100:
+            print(f"   ⚠️ SKIP {pair_key}: Position too small (${position_value:.0f} < $100, Cash=${portfolio['cash']:.0f})")
             return portfolio, trades
+        
+        print(f"   ✅ EXECUTING {trade_type} on {pair_key}: Z={zscore:.2f}, Size=${position_value:.0f}")
         
         trade_record["position_tier"] = f"Conf={gk_confidence:.2f} -> ${position_value:.0f}"
         spread_value = prices["price1"] - hedge_ratio * prices["price2"]
@@ -650,6 +687,13 @@ def update_crypto():
     
     signals = []
     
+    # Clear old signals from database before calculating new ones
+    if USE_DATABASE:
+        try:
+            db_clear_signals("crypto")
+        except Exception as e:
+            print(f"⚠️ Failed to clear crypto signals: {e}")
+    
     for pair in CRYPTO_PAIRS:
         coin1, coin2 = pair["coin1"], pair["coin2"]
         pair_key = f"{coin1}-{coin2}"
@@ -684,6 +728,18 @@ def update_crypto():
                 signal["action"] = "NO_SIGNAL"
         
         signals.append(signal)
+        
+        # Save signal to database
+        if USE_DATABASE:
+            try:
+                db_update_signal(
+                    "crypto", pair_key, signal.get("action", "NO_SIGNAL"),
+                    float(zscore), float(hedge_ratio), current_prices,
+                    gatekeeper_approved=True,  # Will be updated if blocked
+                    gatekeeper_reason=None
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to save signal {pair_key}: {e}")
     
     total_value = portfolio["cash"]
     for pos in portfolio["positions"].values():
@@ -696,6 +752,7 @@ def update_crypto():
     save_portfolio(portfolio, "crypto")
     save_trades(trades, "crypto")
     
+    print(f"   ✅ Processed {len(signals)} crypto pairs")
     return portfolio
 
 
@@ -729,6 +786,13 @@ def update_stocks():
         return portfolio
     
     signals = []
+    
+    # Clear old signals from database before calculating new ones
+    if USE_DATABASE:
+        try:
+            db_clear_signals("stocks")
+        except Exception as e:
+            print(f"⚠️ Failed to clear stock signals: {e}")
     
     for pair in STOCK_PAIRS:
         stock1, stock2 = pair["stock1"], pair["stock2"]
@@ -770,6 +834,18 @@ def update_stocks():
                 signal["action"] = "NO_SIGNAL"
         
         signals.append(signal)
+        
+        # Save signal to database
+        if USE_DATABASE:
+            try:
+                db_update_signal(
+                    "stocks", pair_key, signal.get("action", "NO_SIGNAL"),
+                    float(zscore), float(hedge_ratio), current_prices,
+                    gatekeeper_approved=True,  # Will be updated if blocked
+                    gatekeeper_reason=None
+                )
+            except Exception as e:
+                print(f"⚠️ Failed to save signal {pair_key}: {e}")
     
     total_value = portfolio["cash"]
     for pos in portfolio["positions"].values():
@@ -782,29 +858,19 @@ def update_stocks():
     save_portfolio(portfolio, "stocks")
     save_trades(trades, "stocks")
     
+    print(f"   ✅ Processed {len(signals)} stock pairs")
     return portfolio
 
 
 def background_updater():
-    """Background thread to update both portfolios and refresh pairs weekly."""
-    last_pair_check = datetime.now()
+    """Background thread to update both portfolios."""
+    # NOTE: Pair refresh is DISABLED in background to save memory on Render
+    # Use the /api/pairs/refresh endpoint to manually refresh pairs
     
     while True:
         try:
             update_crypto()
             update_stocks()
-            
-            # Check if pairs need refreshing (once per day check, refresh weekly)
-            hours_since_check = (datetime.now() - last_pair_check).total_seconds() / 3600
-            if hours_since_check >= 24:  # Check once per day
-                last_pair_check = datetime.now()
-                if should_refresh_pairs():
-                    print("\n🔄 Pairs are stale, scheduling refresh...")
-                    # Run in a separate thread to not block updates
-                    import threading
-                    refresh_thread = threading.Thread(target=refresh_stock_pairs, daemon=True)
-                    refresh_thread.start()
-                    
         except Exception as e:
             print(f"❌ Update error: {e}")
         time.sleep(UPDATE_INTERVAL)
