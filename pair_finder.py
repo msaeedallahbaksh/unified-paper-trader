@@ -35,7 +35,10 @@ warnings.filterwarnings('ignore')
 # ============================================================
 # CONFIGURATION
 # ============================================================
-OUTPUT_FILE = Path(__file__).parent / "pairs_config.json"
+# Save to data/ directory (same as app.py DATA_DIR)
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+OUTPUT_FILE = DATA_DIR / "pairs_config.json"
 MIN_DATA_POINTS = 200  # ~1 year of trading days
 COINT_PVALUE_THRESHOLD = 0.05  # 95% confidence
 MAX_HALF_LIFE_DAYS = 15  # Must revert within 15 days
