@@ -32,12 +32,16 @@ except ImportError:
     logger.warning("psycopg2 not available - using JSON storage")
 
 # Database connection string from environment
-# Note: Special characters in password must be URL encoded (# = %23)
+# REQUIRED: Set DATABASE_URL on Render with your Supabase POOLER connection string
+# Get it from: Supabase Dashboard → Connect → Connection Pooler → Session mode
+# Format: postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# Fallback to Supabase direct connection if not set
-if not DATABASE_URL:
-    DATABASE_URL = 'postgresql://postgres:musl1m%23ntre@db.linfgykvqzixrmaxlrho.supabase.co:5432/postgres'
+# Log whether DATABASE_URL is set
+if DATABASE_URL:
+    logger.info(f"✅ DATABASE_URL is set (using PostgreSQL)")
+else:
+    logger.warning("⚠️ DATABASE_URL not set - using JSON fallback storage")
 
 # Database availability flag
 DATABASE_AVAILABLE = False
