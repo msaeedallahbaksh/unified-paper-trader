@@ -686,20 +686,12 @@
         // Pair options for chart
         const cryptoPairs = ['ETC-BCH', 'SHIB-BCH', 'XRP-XLM', 'LTC-XLM', 'ETC-XLM', 'SHIB-XLM', 'ETC-AAVE', 'SHIB-AAVE', 'DOGE-LINK'];
         const stockPairs = [
-            // Big Tech / Semiconductors
-            'NVDA-AMD', 'GOOGL-META', 'AAPL-MSFT', 'AMZN-GOOGL', 'NFLX-DIS', 'AVGO-QCOM', 'CRM-NOW', 'INTC-AMD',
-            // EV / Automotive
-            'TSLA-GM', 'F-GM',
-            // Payments / Fintech
-            'MA-V', 'PYPL-SQ', 'GS-JPM',
-            // Energy
-            'CVX-XOM', 'COP-EOG',
-            // Consumer
-            'HD-LOW', 'KO-PEP', 'MCD-SBUX',
-            // Defense / Industrial
-            'LMT-NOC', 'BA-LMT',
-            // Healthcare
-            'JNJ-PFE', 'UNH-CVS'
+            // Mathematically proven (from pair_finder.py)
+            'C-GS', 'AXP-BAC', 'MS-PH', 'GS-WFC', 'PH-WFC', 'BAC-MS',  // Financials
+            'COP-OXY', 'COP-EOG',  // Energy
+            'KHC-PG', 'GIS-HSY', 'HSY-PG',  // Consumer
+            // Classic pairs (manually added)
+            'MA-V', 'CVX-XOM', 'HD-LOW', 'KO-PEP'
         ];
 
         function updatePairOptions() {

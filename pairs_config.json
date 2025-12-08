@@ -1,0 +1,110 @@
+{
+  "generated_at": "2025-12-08T10:57:54.912427",
+  "algorithm": "OPTICS clustering + Engle-Granger cointegration + Half-life filter",
+  "thresholds": {
+    "coint_pvalue": 0.05,
+    "max_half_life_days": 15,
+    "min_correlation": 0.5
+  },
+  "pairs": [
+    {
+      "stock1": "C",
+      "stock2": "GS",
+      "correlation": 0.99,
+      "cluster": "Financials",
+      "pvalue": 0.0026,
+      "half_life": 4.2,
+      "hedge_ratio": 0.133
+    },
+    {
+      "stock1": "AXP",
+      "stock2": "BAC",
+      "correlation": 0.97,
+      "cluster": "Financials",
+      "pvalue": 0.0063,
+      "half_life": 5.8,
+      "hedge_ratio": 6.5909
+    },
+    {
+      "stock1": "COP",
+      "stock2": "OXY",
+      "correlation": 0.9,
+      "cluster": "Energy",
+      "pvalue": 0.0074,
+      "half_life": 5.5,
+      "hedge_ratio": 1.3117
+    },
+    {
+      "stock1": "MS",
+      "stock2": "PH",
+      "correlation": 0.96,
+      "cluster": "Financials",
+      "pvalue": 0.0082,
+      "half_life": 6.1,
+      "hedge_ratio": 0.2317
+    },
+    {
+      "stock1": "COP",
+      "stock2": "EOG",
+      "correlation": 0.86,
+      "cluster": "Energy",
+      "pvalue": 0.0204,
+      "half_life": 7.5,
+      "hedge_ratio": 0.5637
+    },
+    {
+      "stock1": "GS",
+      "stock2": "WFC",
+      "correlation": 0.94,
+      "cluster": "Financials",
+      "pvalue": 0.0267,
+      "half_life": 8.2,
+      "hedge_ratio": 14.5464
+    },
+    {
+      "stock1": "PH",
+      "stock2": "WFC",
+      "correlation": 0.92,
+      "cluster": "Financials",
+      "pvalue": 0.0351,
+      "half_life": 7.5,
+      "hedge_ratio": 10.6742
+    },
+    {
+      "stock1": "GIS",
+      "stock2": "HSY",
+      "correlation": -0.54,
+      "cluster": "Consumer",
+      "pvalue": 0.0279,
+      "half_life": 10.1,
+      "hedge_ratio": -0.2001
+    },
+    {
+      "stock1": "BAC",
+      "stock2": "MS",
+      "correlation": 0.98,
+      "cluster": "Financials",
+      "pvalue": 0.0428,
+      "half_life": 7.0,
+      "hedge_ratio": 0.2473
+    },
+    {
+      "stock1": "KHC",
+      "stock2": "PG",
+      "correlation": 0.79,
+      "cluster": "Consumer",
+      "pvalue": 0.041,
+      "half_life": 8.2,
+      "hedge_ratio": 0.189
+    },
+    {
+      "stock1": "HSY",
+      "stock2": "PG",
+      "correlation": -0.5,
+      "cluster": "Consumer",
+      "pvalue": 0.0435,
+      "half_life": 9.3,
+      "hedge_ratio": -0.9368
+    }
+  ]
+}
