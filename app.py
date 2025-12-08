@@ -113,16 +113,41 @@ CRYPTO_PAIRS = [
 # STOCK UNIVERSE (S&P 500 Top Pairs from Spectral Clustering)
 # ============================================================
 STOCK_PAIRS = [
-    {"stock1": "MA", "stock2": "V", "correlation": 0.91, "cluster": "Payments"},
-    {"stock1": "HD", "stock2": "LOW", "correlation": 0.89, "cluster": "Home Improvement"},
-    {"stock1": "COP", "stock2": "EOG", "correlation": 0.88, "cluster": "Energy"},
-    {"stock1": "GS", "stock2": "JPM", "correlation": 0.86, "cluster": "Financials"},
-    {"stock1": "CVX", "stock2": "XOM", "correlation": 0.86, "cluster": "Energy"},
-    {"stock1": "DUK", "stock2": "SO", "correlation": 0.84, "cluster": "Utilities"},
-    {"stock1": "LMT", "stock2": "NOC", "correlation": 0.82, "cluster": "Defense"},
-    {"stock1": "KO", "stock2": "PEP", "correlation": 0.81, "cluster": "Beverages"},
+    # Big Tech / Semiconductors
+    {"stock1": "NVDA", "stock2": "AMD", "correlation": 0.88, "cluster": "Semiconductors"},
     {"stock1": "GOOGL", "stock2": "META", "correlation": 0.78, "cluster": "Tech"},
     {"stock1": "AAPL", "stock2": "MSFT", "correlation": 0.75, "cluster": "Tech"},
+    {"stock1": "AMZN", "stock2": "GOOGL", "correlation": 0.72, "cluster": "Tech"},
+    {"stock1": "NFLX", "stock2": "DIS", "correlation": 0.68, "cluster": "Streaming"},
+    {"stock1": "AVGO", "stock2": "QCOM", "correlation": 0.85, "cluster": "Semiconductors"},
+    {"stock1": "CRM", "stock2": "NOW", "correlation": 0.82, "cluster": "Cloud/SaaS"},
+    {"stock1": "INTC", "stock2": "AMD", "correlation": 0.76, "cluster": "Semiconductors"},
+    
+    # EV / Automotive
+    {"stock1": "TSLA", "stock2": "GM", "correlation": 0.55, "cluster": "Automotive"},
+    {"stock1": "F", "stock2": "GM", "correlation": 0.78, "cluster": "Automotive"},
+    
+    # Payments / Fintech
+    {"stock1": "MA", "stock2": "V", "correlation": 0.91, "cluster": "Payments"},
+    {"stock1": "PYPL", "stock2": "SQ", "correlation": 0.75, "cluster": "Fintech"},
+    {"stock1": "GS", "stock2": "JPM", "correlation": 0.86, "cluster": "Financials"},
+    
+    # Energy
+    {"stock1": "CVX", "stock2": "XOM", "correlation": 0.86, "cluster": "Energy"},
+    {"stock1": "COP", "stock2": "EOG", "correlation": 0.88, "cluster": "Energy"},
+    
+    # Consumer / Retail
+    {"stock1": "HD", "stock2": "LOW", "correlation": 0.89, "cluster": "Home Improvement"},
+    {"stock1": "KO", "stock2": "PEP", "correlation": 0.81, "cluster": "Beverages"},
+    {"stock1": "MCD", "stock2": "SBUX", "correlation": 0.72, "cluster": "Restaurants"},
+    
+    # Defense / Industrial
+    {"stock1": "LMT", "stock2": "NOC", "correlation": 0.82, "cluster": "Defense"},
+    {"stock1": "BA", "stock2": "LMT", "correlation": 0.70, "cluster": "Aerospace"},
+    
+    # Healthcare / Pharma
+    {"stock1": "JNJ", "stock2": "PFE", "correlation": 0.65, "cluster": "Pharma"},
+    {"stock1": "UNH", "stock2": "CVS", "correlation": 0.68, "cluster": "Healthcare"},
 ]
 
 
