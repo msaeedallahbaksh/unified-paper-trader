@@ -983,6 +983,10 @@ def execute_trade(
             trade_record["action"] = "CLOSE"
             trade_record["entry_zscore"] = pos["entry_zscore"]
             
+            # Spread value for audit/logging/database (use the hedge ratio used for the position)
+            hr_used = float(pos.get("hedge_ratio", hedge_ratio) or 0.0)
+            exit_spread = float(prices.get("price1", 0.0) or 0.0) - hr_used * float(prices.get("price2", 0.0) or 0.0)
+
             del portfolio["positions"][pair_key]
             
             # Save to database
@@ -990,9 +994,19 @@ def execute_trade(
                 try:
                     db_remove_position(market, pair_key)
                     db_update_cash(market, portfolio["cash"])
-                    db_add_trade(market, pair_key, "CLOSE", float(zscore), float(hedge_ratio),
-                                float(exit_spread), prices, f"Closed: PnL=${pnl:.2f}",
-                                pnl=pnl, gatekeeper_prob=None)
+                    reason = f"Closed: {close_reason or 'EXIT'} | PnL=${pnl_after_cost:.2f} ({pnl_pct:.2f}%)"
+                    db_add_trade(
+                        market,
+                        pair_key,
+                        "CLOSE",
+                        float(zscore),
+                        float(hr_used),
+                        float(exit_spread),
+                        prices,
+                        reason,
+                        pnl=float(pnl_after_cost),
+                        gatekeeper_prob=None,
+                    )
                 except Exception as e:
                     print(f"⚠️ Database save error: {e}")
     
