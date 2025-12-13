@@ -646,19 +646,28 @@
             const tradesRes = await fetch(`/api/trades/${market}`);
             const trades = await tradesRes.json();
             const tradesEl = document.getElementById(`${prefix}-trades-list`);
-            const closedTrades = trades.filter(t => t.action === 'CLOSE').slice(-5).reverse();
-            
-            if (closedTrades.length === 0) {
-                tradesEl.innerHTML = '<div class="empty-state">No completed trades yet</div>';
+            const sortedTrades = [...trades].sort((a, b) => new Date(a.time) - new Date(b.time));
+            const closedTrades = sortedTrades.filter(t => t.action === 'CLOSE');
+
+            // If no CLOSE trades yet, show recent activity (OPENs) so the UI isn't blank.
+            const displayTrades = (closedTrades.length > 0 ? closedTrades : sortedTrades).slice(-5).reverse();
+            const header = closedTrades.length > 0
+                ? ''
+                : '<div class="empty-state" style="margin-bottom: 10px;">No completed trades yet — showing latest trade activity</div>';
+
+            if (displayTrades.length === 0) {
+                tradesEl.innerHTML = '<div class="empty-state">No trades yet</div>';
             } else {
-                tradesEl.innerHTML = closedTrades.map(t => `
+                tradesEl.innerHTML = header + displayTrades.map(t => `
                     <div class="list-item">
                         <div>
                             <div class="item-pair">${t.pair}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${formatTime(t.time)}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                                ${formatTime(t.time)} • ${t.action || t.type || '—'}
+                            </div>
                         </div>
-                        <div class="item-value ${t.pnl >= 0 ? 'positive' : 'negative'}">
-                            ${t.pnl >= 0 ? '+' : ''}${formatCurrency(t.pnl)}
+                        <div class="item-value ${t.pnl !== null && t.pnl !== undefined ? (t.pnl >= 0 ? 'positive' : 'negative') : ''}">
+                            ${t.pnl !== null && t.pnl !== undefined ? `${t.pnl >= 0 ? '+' : ''}${formatCurrency(t.pnl)}` : '--'}
                         </div>
                     </div>
                 `).join('');
