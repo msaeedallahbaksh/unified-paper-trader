@@ -594,18 +594,59 @@ def load_trades(market="crypto"):
         normalized.sort(key=_trade_time_key)
         return normalized
 
+    db_trades = []
     if USE_DATABASE:
         try:
-            return _normalize_trades(db_get_trades(market, limit=100))
+            db_trades = _normalize_trades(db_get_trades(market, limit=200))
         except Exception as e:
             print(f"⚠️ Database trades load failed: {e}")
-    
-    # JSON fallback
+
+    # Always try to load JSON backup (even when DB is enabled).
+    # This prevents "missing closes" in the UI if a DB write failed mid-trade.
+    json_trades = []
     file = DATA_DIR / f"trades_{market}.json"
     if file.exists():
-        with open(file, 'r') as f:
-            return _normalize_trades(json.load(f))
-    return []
+        try:
+            with open(file, 'r') as f:
+                json_trades = _normalize_trades(json.load(f))
+        except Exception as e:
+            print(f"⚠️ JSON trades load failed: {e}")
+
+    if not db_trades and not json_trades:
+        return []
+
+    if db_trades and not json_trades:
+        return db_trades
+
+    if json_trades and not db_trades:
+        return json_trades
+
+    # Merge + de-dupe (best-effort).
+    merged = []
+    seen = set()
+
+    def _dedupe_key(t: dict) -> str:
+        if t.get("id") is not None:
+            return f"db:{t.get('id')}"
+        return "|".join(
+            [
+                str(t.get("time") or ""),
+                str(t.get("pair") or ""),
+                str(t.get("type") or t.get("trade_type") or ""),
+                str(t.get("action") or ""),
+                str(t.get("pnl") or ""),
+            ]
+        )
+
+    for t in db_trades + json_trades:
+        key = _dedupe_key(t)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(t)
+
+    merged.sort(key=_trade_time_key)
+    return merged
 
 
 def save_trades(trades, market="crypto"):
