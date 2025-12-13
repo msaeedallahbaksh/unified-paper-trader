@@ -528,9 +528,75 @@ def save_portfolio(portfolio, market="crypto"):
 
 def load_trades(market="crypto"):
     """Load trade history from database or JSON."""
+    def _trade_time_key(t: dict) -> datetime:
+        ts = t.get("time") or t.get("created_at") or t.get("timestamp")
+        if ts is None:
+            return datetime.min
+        if isinstance(ts, datetime):
+            return ts
+        if isinstance(ts, (int, float)):
+            try:
+                return datetime.fromtimestamp(ts)
+            except Exception:
+                return datetime.min
+        if isinstance(ts, str):
+            try:
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                return datetime.min
+        return datetime.min
+
+    def _normalize_trade(t: dict) -> dict:
+        # Copy so callers don't mutate DB row dicts
+        d = dict(t or {})
+
+        # Normalize time to ISO string
+        if "time" not in d or d["time"] is None:
+            ts = d.get("created_at") or d.get("timestamp")
+            if isinstance(ts, datetime):
+                d["time"] = ts.isoformat()
+            elif ts is not None:
+                d["time"] = str(ts)
+        elif isinstance(d["time"], datetime):
+            d["time"] = d["time"].isoformat()
+
+        # Normalize trade type naming
+        trade_type = d.get("type") or d.get("trade_type") or d.get("tradeType")
+        if "type" not in d or d.get("type") is None:
+            if trade_type is not None:
+                d["type"] = trade_type
+
+        # Normalize action (frontend expects OPEN/CLOSE)
+        if not d.get("action"):
+            tt = str(trade_type).upper() if trade_type is not None else ""
+            d["action"] = "CLOSE" if tt == "CLOSE" else ("OPEN" if tt else "UNKNOWN")
+
+        # Ensure pnl is JSON-serializable float when present
+        if d.get("pnl") is not None:
+            try:
+                d["pnl"] = float(d["pnl"])
+            except Exception:
+                pass
+
+        # Prices sometimes come back as JSON string from DB adapters
+        if isinstance(d.get("prices"), str):
+            try:
+                d["prices"] = json.loads(d["prices"])
+            except Exception:
+                pass
+
+        return d
+
+    def _normalize_trades(trades: list) -> list:
+        if not isinstance(trades, list):
+            return []
+        normalized = [_normalize_trade(t) for t in trades if isinstance(t, dict)]
+        normalized.sort(key=_trade_time_key)
+        return normalized
+
     if USE_DATABASE:
         try:
-            return db_get_trades(market, limit=100)
+            return _normalize_trades(db_get_trades(market, limit=100))
         except Exception as e:
             print(f"⚠️ Database trades load failed: {e}")
     
@@ -538,7 +604,7 @@ def load_trades(market="crypto"):
     file = DATA_DIR / f"trades_{market}.json"
     if file.exists():
         with open(file, 'r') as f:
-            return json.load(f)
+            return _normalize_trades(json.load(f))
     return []
 
 
