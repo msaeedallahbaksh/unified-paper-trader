@@ -101,6 +101,22 @@ CRYPTO_ZSCORE_EXIT = float(os.environ.get("CRYPTO_ZSCORE_EXIT", "0.5"))
 STOCK_ZSCORE_ENTRY = float(os.environ.get("STOCK_ZSCORE_ENTRY", "1.5"))
 STOCK_ZSCORE_EXIT = float(os.environ.get("STOCK_ZSCORE_EXIT", "0.5"))
 
+# Risk controls (paper trading realism + survival)
+TRADING_COST_BPS = float(os.environ.get("TRADING_COST_BPS", "2.0"))  # per open/close on gross notional
+CRYPTO_STOP_ZSCORE = float(os.environ.get("CRYPTO_STOP_ZSCORE", "4.0"))
+STOCK_STOP_ZSCORE = float(os.environ.get("STOCK_STOP_ZSCORE", "3.5"))
+
+CRYPTO_STOP_LOSS_PCT = float(os.environ.get("CRYPTO_STOP_LOSS_PCT", "0.06"))  # -6%
+STOCK_STOP_LOSS_PCT = float(os.environ.get("STOCK_STOP_LOSS_PCT", "0.04"))    # -4%
+CRYPTO_TAKE_PROFIT_PCT = float(os.environ.get("CRYPTO_TAKE_PROFIT_PCT", "0.05"))
+STOCK_TAKE_PROFIT_PCT = float(os.environ.get("STOCK_TAKE_PROFIT_PCT", "0.03"))
+
+CRYPTO_MAX_HOLDING_HOURS = float(os.environ.get("CRYPTO_MAX_HOLDING_HOURS", "168"))  # 7 days
+STOCK_MAX_HOLDING_HOURS = float(os.environ.get("STOCK_MAX_HOLDING_HOURS", "72"))    # 3 days
+
+MAX_OPEN_POSITIONS_CRYPTO = int(os.environ.get("MAX_OPEN_POSITIONS_CRYPTO", "6"))
+MAX_OPEN_POSITIONS_STOCKS = int(os.environ.get("MAX_OPEN_POSITIONS_STOCKS", "8"))
+
 # Data settings (yfinance)
 CRYPTO_DATA_PERIOD = os.environ.get("CRYPTO_DATA_PERIOD", "60d")
 CRYPTO_DATA_INTERVAL = os.environ.get("CRYPTO_DATA_INTERVAL", "").strip() or None
@@ -135,6 +151,25 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
+# Models directory (tracked in repo)
+MODELS_DIR = BASE_DIR / "models"
+MODELS_DIR.mkdir(exist_ok=True)
+
+# Optional: Stock edge model (trained offline) to filter/sized entries
+STOCK_EDGE_MODEL_FILE = MODELS_DIR / "stock_edge_model.json"
+STOCK_EDGE_THRESHOLD = float(os.environ.get("STOCK_EDGE_THRESHOLD", "0.55"))
+STOCK_EDGE_BLOCKING = os.environ.get("STOCK_EDGE_BLOCKING", "0").strip() in ("1", "true", "True", "yes", "YES")
+_stock_edge_model = None
+try:
+    if STOCK_EDGE_MODEL_FILE.exists():
+        from stock_edge_model import StockEdgeModel, extract_features
+
+        _stock_edge_model = StockEdgeModel.load(STOCK_EDGE_MODEL_FILE)
+        mode = "blocking" if STOCK_EDGE_BLOCKING else "sizing-only"
+        print(f"🧠 Stock edge model loaded: {STOCK_EDGE_MODEL_FILE} ({mode}, threshold={STOCK_EDGE_THRESHOLD})")
+except Exception as e:
+    print(f"⚠️ Failed to load stock edge model: {e}")
+
 # ============================================================
 # CRYPTO PAIRS (Robinhood)
 # ============================================================
@@ -156,6 +191,7 @@ CRYPTO_PAIRS = [
 # Auto-refreshed weekly by background task
 # ============================================================
 PAIRS_CONFIG_FILE = DATA_DIR / "pairs_config.json"
+FALLBACK_PAIRS_CONFIG_FILE = MODELS_DIR / "pairs_config.json"
 PAIR_REFRESH_DAYS = 7  # Refresh pairs every 7 days
 
 # Default pairs (used if no config file exists)
@@ -237,11 +273,18 @@ def load_stock_pairs() -> list:
     pairs = []
 
     try:
-        if PAIRS_CONFIG_FILE.exists():
-            with open(PAIRS_CONFIG_FILE, 'r') as f:
+        config_path = None
+        # Prefer optimized config shipped with the app; fall back to runtime-generated data config.
+        if FALLBACK_PAIRS_CONFIG_FILE.exists():
+            config_path = FALLBACK_PAIRS_CONFIG_FILE
+        elif PAIRS_CONFIG_FILE.exists():
+            config_path = PAIRS_CONFIG_FILE
+
+        if config_path is not None:
+            with open(config_path, 'r') as f:
                 config = json.load(f)
                 pairs = config.get('pairs', []) or []
-                print(f"📊 Loaded {len(pairs)} stock pairs from config (generated: {config.get('generated_at', 'unknown')})")
+                print(f"📊 Loaded {len(pairs)} stock pairs from config: {config_path.name} (generated: {config.get('generated_at', 'unknown')})")
     except Exception as e:
         print(f"⚠️ Error loading pairs config: {e}")
 
@@ -615,14 +658,19 @@ def calculate_crypto_zscore(prices, coin1, coin2, window=30):
 
 
 def calculate_stock_zscore(prices, stock1, stock2):
-    """Calculate Kalman filter z-score for stock pair."""
+    """
+    Calculate Kalman filter z-score for stock pair.
+
+    Returns:
+        (zscore, hedge_ratio, current_prices, context)
+    """
     if stock1 not in prices.columns or stock2 not in prices.columns:
-        return None, None, None
+        return None, None, None, None
 
     # Work on aligned, non-NaN data (Kalman can't handle missing obs)
     pair_prices = prices[[stock1, stock2]].dropna()
     if len(pair_prices) < STOCK_MIN_BARS:
-        return None, None, None
+        return None, None, None, None
 
     if STOCK_SIGNAL_LOOKBACK_BARS and len(pair_prices) > STOCK_SIGNAL_LOOKBACK_BARS:
         pair_prices = pair_prices.tail(STOCK_SIGNAL_LOOKBACK_BARS)
@@ -631,13 +679,28 @@ def calculate_stock_zscore(prices, stock1, stock2):
     # Also: do NOT re-feed the same history into a persistent filter on every update,
     # otherwise z-scores collapse toward 0 and you get no trades.
     kf = KalmanFilter(delta=1e-4, R=1.0)
-    for i in range(len(pair_prices)):
-        kf.update(float(pair_prices[stock1].iloc[i]), float(pair_prices[stock2].iloc[i]))
+    z_hist = []
+    hr_hist = []
+    p1_vals = pair_prices[stock1].astype(float).values
+    p2_vals = pair_prices[stock2].astype(float).values
 
-    return kf.get_zscore(), kf.get_hedge_ratio(), {
-        "price1": float(pair_prices[stock1].iloc[-1]),
-        "price2": float(pair_prices[stock2].iloc[-1]),
+    for i in range(len(pair_prices)):
+        kf.update(float(p1_vals[i]), float(p2_vals[i]))
+        z_hist.append(float(kf.get_zscore()))
+        hr_hist.append(float(kf.get_hedge_ratio()))
+
+    current_prices = {
+        "price1": float(p1_vals[-1]),
+        "price2": float(p2_vals[-1]),
     }
+    context = {
+        "z_hist": z_hist,
+        "p1_hist": p1_vals.tolist(),
+        "p2_hist": p2_vals.tolist(),
+        "hr_hist": hr_hist,
+    }
+
+    return float(z_hist[-1]), float(hr_hist[-1]), current_prices, context
 
 
 # ============================================================
@@ -732,7 +795,72 @@ def get_position_size(confidence: float, portfolio_cash: float) -> float:
     return portfolio_cash * size_pct
 
 
-def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge_ratio, market):
+def _safe_fromiso(dt_str: str) -> datetime:
+    """Parse ISO datetime safely (no tz assumptions)."""
+    try:
+        return datetime.fromisoformat(dt_str)
+    except Exception:
+        return datetime.now()
+
+
+def calculate_unrealized_pnl(pos: dict, current_prices: dict) -> tuple[float, float]:
+    """
+    Calculate unrealized PnL for a pairs position.
+
+    Returns:
+        (pnl_dollars, pnl_pct_of_position_value)
+    """
+    try:
+        entry = pos.get("entry_prices", {}) or {}
+        position_value = float(pos.get("position_value", 0.0) or 0.0)
+        if position_value <= 0:
+            return 0.0, 0.0
+
+        qty1 = pos.get("qty1")
+        qty2 = pos.get("qty2")
+
+        # Preferred: leg-level PnL (realistic)
+        if qty1 is not None and qty2 is not None:
+            qty1 = float(qty1)
+            qty2 = float(qty2)
+            p1e = float(entry.get("price1", 0.0) or 0.0)
+            p2e = float(entry.get("price2", 0.0) or 0.0)
+            p1c = float(current_prices.get("price1", 0.0) or 0.0)
+            p2c = float(current_prices.get("price2", 0.0) or 0.0)
+            pnl = qty1 * (p1c - p1e) + qty2 * (p2c - p2e)
+            return pnl, (pnl / position_value) * 100.0
+
+        # Fallback: spread-return approximation (legacy)
+        entry_spread = float(pos.get("entry_spread", 0.0) or 0.0)
+        hedge_ratio = float(pos.get("hedge_ratio", 0.0) or 0.0)
+        exit_spread = float(current_prices.get("price1", 0.0) or 0.0) - hedge_ratio * float(current_prices.get("price2", 0.0) or 0.0)
+
+        if entry_spread == 0:
+            return 0.0, 0.0
+
+        if pos.get("type") == "BUY_SPREAD":
+            spread_return = (exit_spread - entry_spread) / abs(entry_spread)
+        else:
+            spread_return = (entry_spread - exit_spread) / abs(entry_spread)
+
+        pnl = position_value * spread_return
+        return pnl, spread_return * 100.0
+    except Exception:
+        return 0.0, 0.0
+
+
+def execute_trade(
+    portfolio,
+    trades,
+    pair_key,
+    trade_type,
+    zscore,
+    prices,
+    hedge_ratio,
+    market,
+    close_reason=None,
+    confidence_override=None,
+):
     """Execute a paper trade with dynamic position sizing."""
     trade_record = {
         "time": datetime.now().isoformat(),
@@ -745,11 +873,19 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         "market": market,
         "reason": f"Z={zscore:.2f} | Hedge={hedge_ratio:.4f}"
     }
+    if close_reason:
+        trade_record["close_reason"] = str(close_reason)
     
-    gk_confidence = 0.5  # Default confidence
+    gk_confidence = float(confidence_override) if confidence_override is not None else 0.5
+    if confidence_override is not None:
+        trade_record["edge_prob"] = gk_confidence
     
     # Check Gatekeeper for new positions (not for closing)
-    if trade_type in ["BUY_SPREAD", "SELL_SPREAD"] and GATEKEEPER_ENABLED:
+    if (
+        confidence_override is None
+        and trade_type in ["BUY_SPREAD", "SELL_SPREAD"]
+        and GATEKEEPER_ENABLED
+    ):
         approved, prob, gk_reason = check_gatekeeper(
             pair_key, zscore, prices, hedge_ratio, market
         )
@@ -766,6 +902,12 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
             return portfolio, trades
     
     if trade_type in ["BUY_SPREAD", "SELL_SPREAD"]:
+        # Position limit per market (avoid over-trading / over-exposure)
+        max_pos = MAX_OPEN_POSITIONS_STOCKS if market == "stocks" else MAX_OPEN_POSITIONS_CRYPTO
+        if len(portfolio.get("positions", {})) >= max_pos:
+            print(f"   ⚠️ SKIP {pair_key}: Max open positions reached ({max_pos})")
+            return portfolio, trades
+
         # Dynamic position sizing based on Gatekeeper confidence
         position_value = get_position_size(gk_confidence, portfolio["cash"])
         if position_value < 100:
@@ -776,6 +918,23 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
         
         trade_record["position_tier"] = f"Conf={gk_confidence:.2f} -> ${position_value:.0f}"
         spread_value = prices["price1"] - hedge_ratio * prices["price2"]
+
+        # Realistic leg sizing: scale so gross notional ~= position_value
+        p1 = float(prices["price1"])
+        p2 = float(prices["price2"])
+        hr = float(hedge_ratio)
+        denom = max(p1 + abs(hr) * p2, 1e-8)
+        k = float(position_value) / denom
+
+        if trade_type == "BUY_SPREAD":
+            qty1 = k
+            qty2 = -k * hr
+        else:  # SELL_SPREAD
+            qty1 = -k
+            qty2 = k * hr
+
+        # Trading costs (open)
+        open_cost = float(position_value) * (TRADING_COST_BPS / 10000.0)
         
         portfolio["positions"][pair_key] = {
             "type": trade_type,
@@ -783,11 +942,15 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
             "entry_prices": prices,
             "entry_spread": float(spread_value),
             "hedge_ratio": float(hedge_ratio),
+            "qty1": float(qty1),
+            "qty2": float(qty2),
             "position_value": position_value,
+            "open_cost": open_cost,
             "entry_time": datetime.now().isoformat()
         }
-        portfolio["cash"] -= position_value
+        portfolio["cash"] -= (position_value + open_cost)
         trade_record["position_value"] = position_value
+        trade_record["cost"] = open_cost
         trade_record["action"] = "OPEN"
         
         # Save to database
@@ -805,20 +968,18 @@ def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge
     elif trade_type == "CLOSE":
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
-            entry_prices = pos["entry_prices"]
-            entry_spread = pos.get("entry_spread", entry_prices["price1"] - pos["hedge_ratio"] * entry_prices["price2"])
-            exit_spread = prices["price1"] - pos["hedge_ratio"] * prices["price2"]
+            position_value = float(pos.get("position_value", 0.0) or 0.0)
+            pnl, pnl_pct = calculate_unrealized_pnl(pos, prices)
+
+            close_cost = position_value * (TRADING_COST_BPS / 10000.0)
+            pnl_after_cost = pnl - close_cost
+
+            portfolio["cash"] += position_value + pnl_after_cost
             
-            if pos["type"] == "BUY_SPREAD":
-                spread_return = (exit_spread - entry_spread) / abs(entry_spread) if entry_spread != 0 else 0
-            else:
-                spread_return = (entry_spread - exit_spread) / abs(entry_spread) if entry_spread != 0 else 0
-            
-            pnl = pos["position_value"] * spread_return
-            portfolio["cash"] += pos["position_value"] + pnl
-            
-            trade_record["pnl"] = pnl
-            trade_record["return_pct"] = spread_return * 100
+            trade_record["pnl"] = pnl_after_cost
+            trade_record["pnl_gross"] = pnl
+            trade_record["cost"] = close_cost
+            trade_record["return_pct"] = pnl_pct
             trade_record["action"] = "CLOSE"
             trade_record["entry_zscore"] = pos["entry_zscore"]
             
@@ -849,8 +1010,17 @@ def update_crypto():
     portfolio = load_portfolio("crypto")
     trades = load_trades("crypto")
     
+    # Always include any currently open positions, even if pair lists changed
+    crypto_pairs_to_process = list(CRYPTO_PAIRS)
+    known = {f"{p['coin1']}-{p['coin2']}" for p in CRYPTO_PAIRS}
+    for pair_key in portfolio.get("positions", {}).keys():
+        if pair_key not in known and "-" in pair_key:
+            parts = pair_key.split("-")
+            if len(parts) == 2:
+                crypto_pairs_to_process.append({"coin1": parts[0], "coin2": parts[1], "pvalue": None})
+
     coins = set()
-    for pair in CRYPTO_PAIRS:
+    for pair in crypto_pairs_to_process:
         coins.add(pair["coin1"])
         coins.add(pair["coin2"])
     
@@ -867,7 +1037,7 @@ def update_crypto():
         except Exception as e:
             print(f"⚠️ Failed to clear crypto signals: {e}")
     
-    for pair in CRYPTO_PAIRS:
+    for pair in crypto_pairs_to_process:
         coin1, coin2 = pair["coin1"], pair["coin2"]
         pair_key = f"{coin1}-{coin2}"
         
@@ -879,9 +1049,38 @@ def update_crypto():
         
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
+            # Mark-to-market PnL + risk controls
+            pnl, pnl_pct = calculate_unrealized_pnl(pos, current_prices)
+            pos["unrealized_pnl"] = float(pnl)
+            pos["unrealized_pnl_pct"] = float(pnl_pct)
+            pos["last_prices"] = current_prices
+            pos["last_seen"] = datetime.now().isoformat()
+
+            age_hours = (datetime.now() - _safe_fromiso(pos.get("entry_time", ""))).total_seconds() / 3600.0
+
+            close_reason = None
             if abs(zscore) < CRYPTO_ZSCORE_EXIT:
+                close_reason = f"EXIT_Z (|z|<{CRYPTO_ZSCORE_EXIT})"
+            elif abs(zscore) > CRYPTO_STOP_ZSCORE:
+                close_reason = f"STOP_Z (|z|>{CRYPTO_STOP_ZSCORE})"
+            elif pnl_pct <= -CRYPTO_STOP_LOSS_PCT * 100.0:
+                close_reason = f"STOP_LOSS ({pnl_pct:.2f}%)"
+            elif pnl_pct >= CRYPTO_TAKE_PROFIT_PCT * 100.0:
+                close_reason = f"TAKE_PROFIT ({pnl_pct:.2f}%)"
+            elif age_hours >= CRYPTO_MAX_HOLDING_HOURS:
+                close_reason = f"TIME_STOP ({age_hours:.1f}h)"
+
+            if close_reason:
                 portfolio, trades = execute_trade(
-                    portfolio, trades, pair_key, "CLOSE", zscore, current_prices, hedge_ratio, "crypto"
+                    portfolio,
+                    trades,
+                    pair_key,
+                    "CLOSE",
+                    zscore,
+                    current_prices,
+                    pos.get("hedge_ratio", hedge_ratio),
+                    "crypto",
+                    close_reason=close_reason,
                 )
                 signal["action"] = "CLOSED"
             else:
@@ -914,9 +1113,11 @@ def update_crypto():
             except Exception as e:
                 print(f"⚠️ Failed to save signal {pair_key}: {e}")
     
-    total_value = portfolio["cash"]
-    for pos in portfolio["positions"].values():
-        total_value += pos["position_value"]
+    total_value = float(portfolio.get("cash", 0.0) or 0.0)
+    for pos in portfolio.get("positions", {}).values():
+        pv = float(pos.get("position_value", 0.0) or 0.0)
+        upnl = float(pos.get("unrealized_pnl", 0.0) or 0.0)
+        total_value += pv + upnl
     
     portfolio["total_value"] = total_value
     portfolio["last_update"] = datetime.now().isoformat()
@@ -936,8 +1137,17 @@ def update_stocks():
     portfolio = load_portfolio("stocks")
     trades = load_trades("stocks")
     
+    # Always include any currently open positions, even if pair lists changed
+    stock_pairs_to_process = list(STOCK_PAIRS)
+    known = {f"{p['stock1']}-{p['stock2']}" for p in STOCK_PAIRS}
+    for pair_key in portfolio.get("positions", {}).keys():
+        if pair_key not in known and "-" in pair_key:
+            parts = pair_key.split("-")
+            if len(parts) == 2:
+                stock_pairs_to_process.append({"stock1": parts[0], "stock2": parts[1], "cluster": "OPEN_POSITION"})
+
     stocks = set()
-    for pair in STOCK_PAIRS:
+    for pair in stock_pairs_to_process:
         stocks.add(pair["stock1"])
         stocks.add(pair["stock2"])
     
@@ -967,13 +1177,18 @@ def update_stocks():
         except Exception as e:
             print(f"⚠️ Failed to clear stock signals: {e}")
     
-    for pair in STOCK_PAIRS:
+    for pair in stock_pairs_to_process:
         stock1, stock2 = pair["stock1"], pair["stock2"]
         pair_key = f"{stock1}-{stock2}"
         
-        zscore, hedge_ratio, current_prices = calculate_stock_zscore(prices, stock1, stock2)
+        zscore, hedge_ratio, current_prices, context = calculate_stock_zscore(prices, stock1, stock2)
         if zscore is None:
             continue
+
+        # Per-pair overrides (if optimizer writes them into config)
+        entry_th = float(pair.get("entry_z", pair.get("entry_threshold", STOCK_ZSCORE_ENTRY)))
+        exit_th = float(pair.get("exit_z", pair.get("exit_threshold", STOCK_ZSCORE_EXIT)))
+        stop_z = float(pair.get("stop_z", STOCK_STOP_ZSCORE))
         
         signal = {
             "pair": pair_key, 
@@ -985,24 +1200,106 @@ def update_stocks():
         
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
-            if abs(zscore) < STOCK_ZSCORE_EXIT:
+            # Ensure we keep the same parameters for the life of the position
+            exit_th = float(pos.get("exit_threshold", exit_th))
+            stop_z = float(pos.get("stop_z", stop_z))
+            max_hold_hours = float(pos.get("max_holding_hours", pair.get("max_hold_hours", STOCK_MAX_HOLDING_HOURS)))
+
+            pnl, pnl_pct = calculate_unrealized_pnl(pos, current_prices)
+            pos["unrealized_pnl"] = float(pnl)
+            pos["unrealized_pnl_pct"] = float(pnl_pct)
+            pos["last_prices"] = current_prices
+            pos["last_seen"] = datetime.now().isoformat()
+
+            age_hours = (datetime.now() - _safe_fromiso(pos.get("entry_time", ""))).total_seconds() / 3600.0
+
+            close_reason = None
+            if abs(zscore) < exit_th:
+                close_reason = f"EXIT_Z (|z|<{exit_th})"
+            elif abs(zscore) > stop_z:
+                close_reason = f"STOP_Z (|z|>{stop_z})"
+            elif pnl_pct <= -STOCK_STOP_LOSS_PCT * 100.0:
+                close_reason = f"STOP_LOSS ({pnl_pct:.2f}%)"
+            elif pnl_pct >= STOCK_TAKE_PROFIT_PCT * 100.0:
+                close_reason = f"TAKE_PROFIT ({pnl_pct:.2f}%)"
+            elif age_hours >= max_hold_hours:
+                close_reason = f"TIME_STOP ({age_hours:.1f}h)"
+
+            if close_reason:
                 portfolio, trades = execute_trade(
-                    portfolio, trades, pair_key, "CLOSE", zscore, current_prices, hedge_ratio, "stocks"
+                    portfolio,
+                    trades,
+                    pair_key,
+                    "CLOSE",
+                    zscore,
+                    current_prices,
+                    pos.get("hedge_ratio", hedge_ratio),
+                    "stocks",
+                    close_reason=close_reason,
                 )
                 signal["action"] = "CLOSED"
             else:
                 signal["action"] = f"HOLDING ({pos['type']})"
         else:
-            if zscore > STOCK_ZSCORE_ENTRY:
+            if zscore > entry_th:
+                # Optional edge model filter (trained offline)
+                if _stock_edge_model is not None and "extract_features" in globals():
+                    feats = extract_features(context, entry_threshold=entry_th) if context else None
+                    if feats is not None:
+                        edge_prob = float(_stock_edge_model.predict_proba(feats))
+                        signal["edge_prob"] = edge_prob
+                        if STOCK_EDGE_BLOCKING and edge_prob < STOCK_EDGE_THRESHOLD:
+                            signal["action"] = f"BLOCKED (edge={edge_prob:.2f})"
+                            signals.append(signal)
+                            continue
+
                 portfolio, trades = execute_trade(
-                    portfolio, trades, pair_key, "SELL_SPREAD", zscore, current_prices, hedge_ratio, "stocks"
+                    portfolio,
+                    trades,
+                    pair_key,
+                    "SELL_SPREAD",
+                    zscore,
+                    current_prices,
+                    hedge_ratio,
+                    "stocks",
+                    confidence_override=signal.get("edge_prob"),
                 )
                 signal["action"] = "SELL_SPREAD"
-            elif zscore < -STOCK_ZSCORE_ENTRY:
+                # Persist parameters used for this position
+                if pair_key in portfolio.get("positions", {}):
+                    portfolio["positions"][pair_key]["entry_threshold"] = float(entry_th)
+                    portfolio["positions"][pair_key]["exit_threshold"] = float(exit_th)
+                    portfolio["positions"][pair_key]["stop_z"] = float(stop_z)
+                    portfolio["positions"][pair_key]["max_holding_hours"] = float(pair.get("max_hold_hours", STOCK_MAX_HOLDING_HOURS))
+            elif zscore < -entry_th:
+                # Optional edge model filter (trained offline)
+                if _stock_edge_model is not None and "extract_features" in globals():
+                    feats = extract_features(context, entry_threshold=entry_th) if context else None
+                    if feats is not None:
+                        edge_prob = float(_stock_edge_model.predict_proba(feats))
+                        signal["edge_prob"] = edge_prob
+                        if STOCK_EDGE_BLOCKING and edge_prob < STOCK_EDGE_THRESHOLD:
+                            signal["action"] = f"BLOCKED (edge={edge_prob:.2f})"
+                            signals.append(signal)
+                            continue
+
                 portfolio, trades = execute_trade(
-                    portfolio, trades, pair_key, "BUY_SPREAD", zscore, current_prices, hedge_ratio, "stocks"
+                    portfolio,
+                    trades,
+                    pair_key,
+                    "BUY_SPREAD",
+                    zscore,
+                    current_prices,
+                    hedge_ratio,
+                    "stocks",
+                    confidence_override=signal.get("edge_prob"),
                 )
                 signal["action"] = "BUY_SPREAD"
+                if pair_key in portfolio.get("positions", {}):
+                    portfolio["positions"][pair_key]["entry_threshold"] = float(entry_th)
+                    portfolio["positions"][pair_key]["exit_threshold"] = float(exit_th)
+                    portfolio["positions"][pair_key]["stop_z"] = float(stop_z)
+                    portfolio["positions"][pair_key]["max_holding_hours"] = float(pair.get("max_hold_hours", STOCK_MAX_HOLDING_HOURS))
             else:
                 signal["action"] = "NO_SIGNAL"
         
@@ -1020,9 +1317,11 @@ def update_stocks():
             except Exception as e:
                 print(f"⚠️ Failed to save signal {pair_key}: {e}")
     
-    total_value = portfolio["cash"]
-    for pos in portfolio["positions"].values():
-        total_value += pos["position_value"]
+    total_value = float(portfolio.get("cash", 0.0) or 0.0)
+    for pos in portfolio.get("positions", {}).values():
+        pv = float(pos.get("position_value", 0.0) or 0.0)
+        upnl = float(pos.get("unrealized_pnl", 0.0) or 0.0)
+        total_value += pv + upnl
     
     portfolio["total_value"] = total_value
     portfolio["last_update"] = datetime.now().isoformat()

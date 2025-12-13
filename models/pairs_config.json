@@ -1,0 +1,476 @@
+{
+  "generated_at": "2025-12-13T01:00:55.358369Z",
+  "algorithm": "Walk-forward grid search (Kalman z-score) + cost_bps",
+  "data": {
+    "period": "60d",
+    "interval": "15m",
+    "cost_bps": 2.0
+  },
+  "grid": {
+    "entry": [
+      1.25,
+      1.5,
+      1.75,
+      2.0
+    ],
+    "exit": [
+      0.3,
+      0.5,
+      0.8
+    ],
+    "stop_z": [
+      3.0,
+      3.5,
+      4.0
+    ],
+    "max_hold_bars": [
+      78,
+      130,
+      208
+    ]
+  },
+  "pairs": [
+    {
+      "stock1": "COP",
+      "stock2": "EOG",
+      "cluster": "Energy",
+      "correlation": 0.86,
+      "entry_z": 2.0,
+      "exit_z": 0.3,
+      "stop_z": 3.5,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 10,
+        "win_rate": 80.0,
+        "total_return_pct": 0.6463781065224383,
+        "sharpe": 2.2092932602696678,
+        "max_drawdown_pct": -0.11372232013646624
+      }
+    },
+    {
+      "stock1": "MRK",
+      "stock2": "PFE",
+      "cluster": "Cluster 14",
+      "correlation": 0.6925765262237682,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 23,
+        "win_rate": 73.91304347826086,
+        "total_return_pct": 2.171372458242393,
+        "sharpe": 1.3269020974448593,
+        "max_drawdown_pct": -0.9353608930828659
+      }
+    },
+    {
+      "stock1": "BAC",
+      "stock2": "MS",
+      "cluster": "Financials",
+      "correlation": 0.98,
+      "entry_z": 1.25,
+      "exit_z": 0.8,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 13,
+        "win_rate": 61.53846153846154,
+        "total_return_pct": 0.722497307952974,
+        "sharpe": 1.2999443918738849,
+        "max_drawdown_pct": -0.23335268902865058
+      }
+    },
+    {
+      "stock1": "DHR",
+      "stock2": "PFE",
+      "cluster": "Cluster 14",
+      "correlation": 0.6179681952637772,
+      "entry_z": 2.0,
+      "exit_z": 0.3,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 5,
+        "win_rate": 80.0,
+        "total_return_pct": 0.5596478787573966,
+        "sharpe": 1.1303371225356766,
+        "max_drawdown_pct": -0.2988122035568591
+      }
+    },
+    {
+      "stock1": "AMZN",
+      "stock2": "META",
+      "cluster": "Cluster 7",
+      "correlation": 0.6699318333344522,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 7,
+        "win_rate": 71.42857142857143,
+        "total_return_pct": 0.9577936337065607,
+        "sharpe": 0.9900858160222479,
+        "max_drawdown_pct": -0.650729172014005
+      }
+    },
+    {
+      "stock1": "ADP",
+      "stock2": "MA",
+      "cluster": "Cluster 8",
+      "correlation": 0.6878105883754626,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 20,
+        "win_rate": 45.0,
+        "total_return_pct": 0.9324410696741392,
+        "sharpe": 0.878753793029499,
+        "max_drawdown_pct": -0.8656352258455936
+      }
+    },
+    {
+      "stock1": "PH",
+      "stock2": "WFC",
+      "cluster": "Financials",
+      "correlation": 0.92,
+      "entry_z": 1.75,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 9,
+        "win_rate": 66.66666666666666,
+        "total_return_pct": 0.5576807468010925,
+        "sharpe": 0.7589830462032465,
+        "max_drawdown_pct": -0.520002585997691
+      }
+    },
+    {
+      "stock1": "ABBV",
+      "stock2": "PFE",
+      "cluster": "Cluster 14",
+      "correlation": 0.6303243378543892,
+      "entry_z": 1.5,
+      "exit_z": 0.8,
+      "stop_z": 3.5,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 15,
+        "win_rate": 66.66666666666666,
+        "total_return_pct": 0.7570983052261004,
+        "sharpe": 0.6056496910853665,
+        "max_drawdown_pct": -0.9980511775566409
+      }
+    },
+    {
+      "stock1": "HON",
+      "stock2": "MA",
+      "cluster": "Cluster 8",
+      "correlation": 0.604248097382295,
+      "entry_z": 1.5,
+      "exit_z": 0.5,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 9,
+        "win_rate": 66.66666666666666,
+        "total_return_pct": 0.4048968508480355,
+        "sharpe": 0.44101557587177187,
+        "max_drawdown_pct": -0.443799173755398
+      }
+    },
+    {
+      "stock1": "ABBV",
+      "stock2": "MRK",
+      "cluster": "Cluster 14",
+      "correlation": 0.6128787589636675,
+      "entry_z": 1.75,
+      "exit_z": 0.5,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 16,
+        "win_rate": 62.5,
+        "total_return_pct": 0.6812452948880665,
+        "sharpe": 0.39755033787655236,
+        "max_drawdown_pct": -1.0003070360230182
+      }
+    },
+    {
+      "stock1": "META",
+      "stock2": "MSFT",
+      "cluster": "Cluster 7",
+      "correlation": 0.6495050397481578,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 14,
+        "win_rate": 50.0,
+        "total_return_pct": 0.13591990567951573,
+        "sharpe": 0.13973817494374874,
+        "max_drawdown_pct": -0.6014358286120184
+      }
+    },
+    {
+      "stock1": "MA",
+      "stock2": "SYK",
+      "cluster": "Cluster 8",
+      "correlation": 0.604261723566383,
+      "entry_z": 2.0,
+      "exit_z": 0.3,
+      "stop_z": 3.5,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 10,
+        "win_rate": 80.0,
+        "total_return_pct": 0.1183632914625754,
+        "sharpe": 0.0903159746209926,
+        "max_drawdown_pct": -1.2199915076639245
+      }
+    },
+    {
+      "stock1": "ADP",
+      "stock2": "SYK",
+      "cluster": "Cluster 8",
+      "correlation": 0.6045323983012132,
+      "entry_z": 1.75,
+      "exit_z": 0.3,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 15,
+        "win_rate": 46.666666666666664,
+        "total_return_pct": -0.22832157559570243,
+        "sharpe": -0.2431808813033337,
+        "max_drawdown_pct": -1.1343607139955343
+      }
+    },
+    {
+      "stock1": "GIS",
+      "stock2": "HSY",
+      "cluster": "Consumer",
+      "correlation": -0.54,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 7,
+        "win_rate": 57.14285714285714,
+        "total_return_pct": -0.20188744126613534,
+        "sharpe": -0.29920309782261656,
+        "max_drawdown_pct": -0.8954681891678475
+      }
+    },
+    {
+      "stock1": "GS",
+      "stock2": "WFC",
+      "cluster": "Financials",
+      "correlation": 0.94,
+      "entry_z": 1.75,
+      "exit_z": 0.5,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 15,
+        "win_rate": 40.0,
+        "total_return_pct": -0.39990427750853375,
+        "sharpe": -0.35361916825081635,
+        "max_drawdown_pct": -1.2675470393992618
+      }
+    },
+    {
+      "stock1": "COP",
+      "stock2": "OXY",
+      "cluster": "Energy",
+      "correlation": 0.9,
+      "entry_z": 1.75,
+      "exit_z": 0.8,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 11,
+        "win_rate": 45.45454545454545,
+        "total_return_pct": -0.24134129443573737,
+        "sharpe": -0.38993467972539486,
+        "max_drawdown_pct": -0.895123120807733
+      }
+    },
+    {
+      "stock1": "ADI",
+      "stock2": "QCOM",
+      "cluster": "Cluster 1",
+      "correlation": 0.7555830908682082,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 16,
+        "win_rate": 68.75,
+        "total_return_pct": -0.5806004302005174,
+        "sharpe": -0.44162480854655783,
+        "max_drawdown_pct": -1.1357820313551925
+      }
+    },
+    {
+      "stock1": "ADI",
+      "stock2": "TXN",
+      "cluster": "Cluster 1",
+      "correlation": 0.8292031674175075,
+      "entry_z": 1.5,
+      "exit_z": 0.8,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 28,
+        "win_rate": 39.285714285714285,
+        "total_return_pct": -1.1458846474584283,
+        "sharpe": -1.080815506519,
+        "max_drawdown_pct": -1.4967975542293788
+      }
+    },
+    {
+      "stock1": "AMZN",
+      "stock2": "MSFT",
+      "cluster": "Cluster 7",
+      "correlation": 0.6062606165932592,
+      "entry_z": 1.25,
+      "exit_z": 0.5,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 13,
+        "win_rate": 53.84615384615385,
+        "total_return_pct": -0.7123608582023433,
+        "sharpe": -1.104292533809824,
+        "max_drawdown_pct": -0.8607850182242993
+      }
+    },
+    {
+      "stock1": "SYK",
+      "stock2": "V",
+      "cluster": "Cluster 8",
+      "correlation": 0.6310543759645447,
+      "entry_z": 1.25,
+      "exit_z": 0.5,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 37,
+        "win_rate": 37.83783783783784,
+        "total_return_pct": -1.6829253115214993,
+        "sharpe": -1.2111507313190504,
+        "max_drawdown_pct": -1.6829253115214993
+      }
+    },
+    {
+      "stock1": "ADP",
+      "stock2": "V",
+      "cluster": "Cluster 8",
+      "correlation": 0.7168482510959127,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 30,
+        "win_rate": 40.0,
+        "total_return_pct": -1.4430855419155564,
+        "sharpe": -1.2234253147044916,
+        "max_drawdown_pct": -1.9052653361612104
+      }
+    },
+    {
+      "stock1": "AXP",
+      "stock2": "BAC",
+      "cluster": "Financials",
+      "correlation": 0.97,
+      "entry_z": 1.5,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 17,
+        "win_rate": 52.94117647058824,
+        "total_return_pct": -1.9463264913121336,
+        "sharpe": -1.3513182622832607,
+        "max_drawdown_pct": -1.9463264913121336
+      }
+    },
+    {
+      "stock1": "AMGN",
+      "stock2": "PFE",
+      "cluster": "Cluster 14",
+      "correlation": 0.6490557429841568,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.5,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 14,
+        "win_rate": 42.857142857142854,
+        "total_return_pct": -3.026035548343986,
+        "sharpe": -1.4526568566760958,
+        "max_drawdown_pct": -3.4382733412395785
+      }
+    },
+    {
+      "stock1": "HSY",
+      "stock2": "PG",
+      "cluster": "Consumer",
+      "correlation": -0.5,
+      "entry_z": 1.25,
+      "exit_z": 0.3,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 30,
+        "win_rate": 50.0,
+        "total_return_pct": -1.8489214202079496,
+        "sharpe": -1.5363596864940332,
+        "max_drawdown_pct": -2.210749069235644
+      }
+    },
+    {
+      "stock1": "DHR",
+      "stock2": "TMO",
+      "cluster": "Cluster 14",
+      "correlation": 0.8005507183178796,
+      "entry_z": 1.5,
+      "exit_z": 0.5,
+      "stop_z": 3.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 7,
+        "win_rate": 14.285714285714285,
+        "total_return_pct": -0.8361659232633434,
+        "sharpe": -1.6673542784032718,
+        "max_drawdown_pct": -0.8361659232633434
+      }
+    },
+    {
+      "stock1": "MA",
+      "stock2": "V",
+      "cluster": "Cluster 8",
+      "correlation": 0.9103331053898236,
+      "entry_z": 1.75,
+      "exit_z": 0.5,
+      "stop_z": 4.0,
+      "max_hold_hours": 19.5,
+      "test": {
+        "trades": 11,
+        "win_rate": 18.181818181818183,
+        "total_return_pct": -1.1399966027912378,
+        "sharpe": -2.1457199004443304,
+        "max_drawdown_pct": -1.1399966027912378
+      }
+    }
+  ]
+}
