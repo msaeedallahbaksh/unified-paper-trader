@@ -14,6 +14,7 @@ Run weekly to keep pairs fresh!
 """
 
 import json
+import os
 import warnings
 import numpy as np
 import pandas as pd
@@ -39,11 +40,16 @@ warnings.filterwarnings('ignore')
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 OUTPUT_FILE = DATA_DIR / "pairs_config.json"
-MIN_DATA_POINTS = 200  # ~1 year of trading days
-COINT_PVALUE_THRESHOLD = 0.05  # 95% confidence
-MAX_HALF_LIFE_DAYS = 15  # Must revert within 15 days
-MIN_CORRELATION = 0.5  # Minimum correlation within cluster
-TOP_N_PAIRS = 25  # Number of pairs to output
+
+# Tunable thresholds (via env) — widen if you need more stock trades
+MIN_DATA_POINTS = int(os.environ.get("PAIR_FINDER_MIN_DATA_POINTS", "180"))  # ~0.7y trading days
+COINT_PVALUE_THRESHOLD = float(os.environ.get("PAIR_FINDER_COINT_PVALUE", "0.05"))  # 95% confidence
+MAX_HALF_LIFE_DAYS = float(os.environ.get("PAIR_FINDER_MAX_HALF_LIFE_DAYS", "25"))  # faster mean reversion preferred
+MIN_CORRELATION = float(os.environ.get("PAIR_FINDER_MIN_CORRELATION", "0.40"))  # within-cluster correlation
+TOP_N_PAIRS = int(os.environ.get("PAIR_FINDER_TOP_N_PAIRS", "40"))  # output size
+
+# Data cleaning
+MAX_MISSING_FRAC = float(os.environ.get("PAIR_FINDER_MAX_MISSING_FRAC", "0.05"))  # max 5% missing
 
 # S&P 500 tickers (top ~100 by market cap for speed)
 # Full S&P 500 would take too long - use largest/most liquid
@@ -97,7 +103,7 @@ def download_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
     print(f"📥 Downloading data for {len(tickers)} tickers...")
     
     try:
-        data = yf.download(tickers, period=period, progress=True, threads=True)
+        data = yf.download(tickers, period=period, progress=True, threads=True, auto_adjust=True)
         
         if isinstance(data.columns, pd.MultiIndex):
             prices = data['Close'] if 'Close' in data.columns.get_level_values(0) else data['Adj Close']
@@ -106,7 +112,15 @@ def download_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
         
         # Remove tickers with insufficient data
         valid_cols = prices.columns[prices.count() >= MIN_DATA_POINTS]
-        prices = prices[valid_cols].dropna(axis=1, how='any')
+        prices = prices[valid_cols].copy()
+
+        # Drop columns with too many missing values, then fill remaining gaps
+        missing_frac = prices.isna().mean()
+        keep = missing_frac[missing_frac <= MAX_MISSING_FRAC].index
+        prices = prices[keep].ffill().bfill()
+
+        # Final sanity: drop anything still broken
+        prices = prices.dropna(axis=1, how='any')
         
         print(f"✅ Got {len(prices.columns)} tickers with sufficient data")
         return prices

@@ -735,6 +735,7 @@
 
                 const dates = data.data.map(d => d.date);
                 const zscores = data.data.map(d => d.zscore);
+                const entry = (data.entry_threshold !== undefined && data.entry_threshold !== null) ? data.entry_threshold : 2;
 
                 // Z-score line
                 const zscore_trace = {
@@ -746,23 +747,23 @@
                     line: { color: '#4da6ff', width: 2 }
                 };
 
-                // +2 threshold line (SELL)
+                // +Entry threshold line (SELL)
                 const upper_threshold = {
                     x: dates,
-                    y: dates.map(() => 2),
+                    y: dates.map(() => entry),
                     type: 'scatter',
                     mode: 'lines',
-                    name: 'SELL (+2)',
+                    name: `SELL (+${entry})`,
                     line: { color: '#ff4757', width: 2, dash: 'dash' }
                 };
 
-                // -2 threshold line (BUY)
+                // -Entry threshold line (BUY)
                 const lower_threshold = {
                     x: dates,
-                    y: dates.map(() => -2),
+                    y: dates.map(() => -entry),
                     type: 'scatter',
                     mode: 'lines',
-                    name: 'BUY (-2)',
+                    name: `BUY (-${entry})`,
                     line: { color: '#00ff88', width: 2, dash: 'dash' }
                 };
 
@@ -803,9 +804,9 @@
                 const currentZ = data.current_zscore;
                 const zEl = document.getElementById('chart-current-z');
                 zEl.textContent = `Current Z: ${currentZ.toFixed(2)}`;
-                if (currentZ > 2) {
+                if (currentZ > entry) {
                     zEl.style.color = '#ff4757';
-                } else if (currentZ < -2) {
+                } else if (currentZ < -entry) {
                     zEl.style.color = '#00ff88';
                 } else {
                     zEl.style.color = '#4da6ff';

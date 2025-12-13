@@ -22,6 +22,16 @@ from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
 from sklearn.cluster import SpectralClustering
 
+# Windows consoles can default to cp1252 and crash on emoji output.
+# Make stdout/stderr UTF-8 (or at least non-crashing) for local runs.
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # Database Module (Supabase with JSON fallback)
 try:
     from database import init_database, get_storage_mode, DATABASE_AVAILABLE
@@ -82,10 +92,28 @@ app = Flask(__name__)
 # ============================================================
 # CONFIGURATION
 # ============================================================
-INITIAL_CAPITAL = 10000
-BASE_POSITION_SIZE = 0.10  # Base 10% per trade
-ZSCORE_ENTRY = 2.0
-ZSCORE_EXIT = 0.5
+INITIAL_CAPITAL = float(os.environ.get("INITIAL_CAPITAL", "10000"))
+BASE_POSITION_SIZE = float(os.environ.get("BASE_POSITION_SIZE", "0.10"))  # fallback sizing
+
+# Separate thresholds for crypto vs stocks (stocks often need lower thresholds or faster bars)
+CRYPTO_ZSCORE_ENTRY = float(os.environ.get("CRYPTO_ZSCORE_ENTRY", "2.0"))
+CRYPTO_ZSCORE_EXIT = float(os.environ.get("CRYPTO_ZSCORE_EXIT", "0.5"))
+STOCK_ZSCORE_ENTRY = float(os.environ.get("STOCK_ZSCORE_ENTRY", "1.5"))
+STOCK_ZSCORE_EXIT = float(os.environ.get("STOCK_ZSCORE_EXIT", "0.5"))
+
+# Data settings (yfinance)
+CRYPTO_DATA_PERIOD = os.environ.get("CRYPTO_DATA_PERIOD", "60d")
+CRYPTO_DATA_INTERVAL = os.environ.get("CRYPTO_DATA_INTERVAL", "").strip() or None
+STOCK_DATA_PERIOD = os.environ.get("STOCK_DATA_PERIOD", "60d")
+STOCK_DATA_INTERVAL = os.environ.get("STOCK_DATA_INTERVAL", "15m").strip() or None
+
+CRYPTO_MIN_BARS = int(os.environ.get("CRYPTO_MIN_BARS", "30"))
+_default_stock_min_bars = 200 if STOCK_DATA_INTERVAL not in (None, "1d") else 30
+STOCK_MIN_BARS = int(os.environ.get("STOCK_MIN_BARS", str(_default_stock_min_bars)))
+
+# Limit how much history we feed into the stock Kalman per update (keeps it responsive)
+_default_stock_lookback = 800 if STOCK_DATA_INTERVAL not in (None, "1d") else 90
+STOCK_SIGNAL_LOOKBACK_BARS = int(os.environ.get("STOCK_SIGNAL_LOOKBACK_BARS", str(_default_stock_lookback)))
 UPDATE_INTERVAL = 180  # 3 minutes (faster updates)
 STALE_THRESHOLD = 300  # 5 minutes (more responsive stale detection)
 
@@ -102,7 +130,9 @@ POSITION_TIERS = {
     0.75: 0.02,  # 75%+ confidence: 2% of capital (minimum)
 }
 
-DATA_DIR = Path("data")
+# Always store state relative to this file (avoid cwd-dependent bugs)
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 # ============================================================
@@ -144,21 +174,106 @@ DEFAULT_STOCK_PAIRS = [
     {"stock1": "KO", "stock2": "PEP", "correlation": 0.81, "cluster": "Beverages"},
 ]
 
+MIN_STOCK_PAIRS = int(os.environ.get("MIN_STOCK_PAIRS", "25"))
+MAX_STOCK_PAIRS = int(os.environ.get("MAX_STOCK_PAIRS", "60"))
+
+# Optional: broaden the universe using the quant_system precomputed universe (more sectors).
+QUANT_SYSTEM_UNIVERSE_FILE = BASE_DIR.parent / "quant_system" / "data" / "sp500_universe.json"
+
+
+def _pair_dedupe_key(stock1: str, stock2: str) -> tuple:
+    """Order-insensitive key for de-duping pairs across sources."""
+    a, b = str(stock1).upper(), str(stock2).upper()
+    return (a, b) if a <= b else (b, a)
+
+
+def _load_quant_system_pairs() -> list:
+    """Load correlation-cluster pairs from quant_system as a diversified fallback."""
+    try:
+        if not QUANT_SYSTEM_UNIVERSE_FILE.exists():
+            return []
+
+        with open(QUANT_SYSTEM_UNIVERSE_FILE, "r") as f:
+            data = json.load(f)
+
+        pairs = data.get("pairs", []) or []
+        out = []
+        for p in pairs:
+            s1 = p.get("stock1")
+            s2 = p.get("stock2")
+            if not s1 or not s2 or s1 == s2:
+                continue
+
+            cluster_id = p.get("cluster")
+            cluster_label = f"Cluster {cluster_id}" if cluster_id is not None else "QuantCluster"
+
+            out.append(
+                {
+                    "stock1": str(s1).upper(),
+                    "stock2": str(s2).upper(),
+                    "correlation": float(p.get("correlation", 0.0)),
+                    "cluster": cluster_label,
+                }
+            )
+
+        if out:
+            print(f"📊 Loaded {len(out)} fallback pairs from quant_system universe")
+        return out
+
+    except Exception as e:
+        print(f"⚠️ Failed to load quant_system universe pairs: {e}")
+        return []
+
 
 def load_stock_pairs() -> list:
-    """Load stock pairs from config file or use defaults."""
+    """
+    Load stock pairs.
+
+    Priority:
+    - `data/pairs_config.json` (cointegration + half-life filtered pairs)
+    - If too few pairs, augment with quant_system diversified pairs
+    - Always ensure we have a reasonable minimum by falling back to DEFAULT_STOCK_PAIRS
+    """
+    pairs = []
+
     try:
         if PAIRS_CONFIG_FILE.exists():
             with open(PAIRS_CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-                pairs = config.get('pairs', DEFAULT_STOCK_PAIRS)
+                pairs = config.get('pairs', []) or []
                 print(f"📊 Loaded {len(pairs)} stock pairs from config (generated: {config.get('generated_at', 'unknown')})")
-                return pairs
     except Exception as e:
         print(f"⚠️ Error loading pairs config: {e}")
-    
-    print(f"📊 Using {len(DEFAULT_STOCK_PAIRS)} default stock pairs")
-    return DEFAULT_STOCK_PAIRS
+
+    if not pairs:
+        print(f"📊 No pairs config found - starting with {len(DEFAULT_STOCK_PAIRS)} defaults")
+        pairs = list(DEFAULT_STOCK_PAIRS)
+
+    # If we have too few pairs, broaden across sectors.
+    if len(pairs) < MIN_STOCK_PAIRS:
+        fallback = _load_quant_system_pairs()
+        if fallback:
+            merged = []
+            seen = set()
+
+            for p in list(pairs) + list(fallback) + list(DEFAULT_STOCK_PAIRS):
+                s1, s2 = p.get("stock1"), p.get("stock2")
+                if not s1 or not s2 or s1 == s2:
+                    continue
+                key = _pair_dedupe_key(s1, s2)
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(p)
+
+            pairs = merged
+
+    # Cap for performance (fetching too many tickers can slow yfinance significantly)
+    if MAX_STOCK_PAIRS and len(pairs) > MAX_STOCK_PAIRS:
+        pairs = pairs[:MAX_STOCK_PAIRS]
+
+    print(f"📊 Using {len(pairs)} stock pairs (min={MIN_STOCK_PAIRS}, max={MAX_STOCK_PAIRS})")
+    return pairs
 
 
 def should_refresh_pairs() -> bool:
@@ -220,9 +335,12 @@ class KalmanFilter:
         self.beta = np.array([0.0, 1.0])  # [intercept, hedge_ratio]
         self.P = np.eye(2) * 1.0
         self.Q = np.eye(2) * delta
+        # Running stats for innovation z-score
         self.innovation_mean = 0.0
         self.innovation_var = 1.0
         self.n = 0
+        self.last_innovation = 0.0
+        self.last_zscore = 0.0
     
     def update(self, y, x):
         """Update filter with new observation."""
@@ -242,18 +360,21 @@ class KalmanFilter:
         I_KH = np.eye(2) - np.outer(K, H)
         self.P = I_KH @ P_pred
         
-        # Update innovation stats
+        # Update innovation stats (EMA) + cache latest z-score
         self.n += 1
         alpha = min(0.1, 2.0 / (self.n + 1))
         self.innovation_mean = (1 - alpha) * self.innovation_mean + alpha * innovation
         self.innovation_var = (1 - alpha) * self.innovation_var + alpha * (innovation - self.innovation_mean)**2
+
+        self.last_innovation = float(innovation)
+        std = np.sqrt(max(self.innovation_var, 1e-8))
+        self.last_zscore = float((innovation - self.innovation_mean) / std)
         
         return innovation
     
     def get_zscore(self):
-        """Get z-score of latest innovation."""
-        std = np.sqrt(max(self.innovation_var, 1e-8))
-        return -self.innovation_mean / std  # Negative for signal direction
+        """Get z-score of the latest innovation (prediction error)."""
+        return self.last_zscore
     
     def get_hedge_ratio(self):
         return self.beta[1]
@@ -388,16 +509,30 @@ def save_trades(trades, market="crypto"):
 # ============================================================
 # DATA FETCHING
 # ============================================================
-def get_crypto_data(symbols, period="60d"):
+def get_crypto_data(symbols, period=None, interval=None):
     """Fetch crypto data."""
+    if period is None:
+        period = CRYPTO_DATA_PERIOD
+    if interval is None:
+        interval = CRYPTO_DATA_INTERVAL
+
     tickers = [f"{s}-USD" for s in symbols]
     try:
-        data = yf.download(tickers, period=period, progress=False, threads=True)
+        download_kwargs = {
+            "period": period,
+            "progress": False,
+            "threads": True,
+            "auto_adjust": True,
+        }
+        if interval:
+            download_kwargs["interval"] = interval
+
+        data = yf.download(tickers, **download_kwargs)
         if data is None or data.empty:
             print(f"⚠️ Crypto data empty")
             return None
         if isinstance(data.columns, pd.MultiIndex):
-            prices = data['Close']
+            prices = data['Close'] if 'Close' in data.columns.get_level_values(0) else data['Adj Close']
         else:
             prices = data[['Close']]
             prices.columns = [tickers[0]]
@@ -410,19 +545,34 @@ def get_crypto_data(symbols, period="60d"):
         return None
 
 
-def get_stock_data(symbols, period="60d"):
+def get_stock_data(symbols, period=None, interval=None):
     """Fetch stock data."""
+    if period is None:
+        period = STOCK_DATA_PERIOD
+    if interval is None:
+        interval = STOCK_DATA_INTERVAL
+
     try:
-        data = yf.download(symbols, period=period, progress=False, threads=True)
+        download_kwargs = {
+            "period": period,
+            "progress": False,
+            "threads": True,
+            "auto_adjust": True,
+        }
+        if interval:
+            download_kwargs["interval"] = interval
+
+        data = yf.download(symbols, **download_kwargs)
         if data is None or data.empty:
             print(f"⚠️ Stock data empty for {symbols}")
             return None
         if isinstance(data.columns, pd.MultiIndex):
-            prices = data['Close']
+            prices = data['Close'] if 'Close' in data.columns.get_level_values(0) else data['Adj Close']
         else:
             prices = data[['Close']]
             prices.columns = [symbols[0]] if isinstance(symbols, list) else [symbols]
-        result = prices.dropna()
+        # Do NOT drop rows across all symbols; pair-level logic handles missing values.
+        result = prices.dropna(axis=1, how='all').dropna(how='all')
         print(f"✅ Stock data fetched: {len(result)} rows for {len(symbols)} symbols")
         return result
     except Exception as e:
@@ -437,16 +587,20 @@ def calculate_crypto_zscore(prices, coin1, coin2, window=30):
     """Calculate rolling z-score for crypto pair (OLS)."""
     if coin1 not in prices.columns or coin2 not in prices.columns:
         return None, None, None
-    
-    y = prices[coin1].values
-    x = prices[coin2].values
+
+    pair_prices = prices[[coin1, coin2]].dropna()
+    if len(pair_prices) < max(window, 10):
+        return None, None, None
+
+    y = pair_prices[coin1].values
+    x = pair_prices[coin2].values
     
     x_const = add_constant(x)
     model = OLS(y, x_const).fit()
     hedge_ratio = model.params[1]
     
     spread = y - hedge_ratio * x
-    spread_series = pd.Series(spread, index=prices.index)
+    spread_series = pd.Series(spread, index=pair_prices.index)
     
     rolling_mean = spread_series.rolling(window=window).mean()
     rolling_std = spread_series.rolling(window=window).std()
@@ -455,36 +609,34 @@ def calculate_crypto_zscore(prices, coin1, coin2, window=30):
     current_zscore = zscore.iloc[-1] if not pd.isna(zscore.iloc[-1]) else 0
     
     return current_zscore, hedge_ratio, {
-        "price1": float(prices[coin1].iloc[-1]),
-        "price2": float(prices[coin2].iloc[-1])
+        "price1": float(pair_prices[coin1].iloc[-1]),
+        "price2": float(pair_prices[coin2].iloc[-1])
     }
 
 
-# Store Kalman filters for stocks
-stock_filters = {}
-
 def calculate_stock_zscore(prices, stock1, stock2):
     """Calculate Kalman filter z-score for stock pair."""
-    global stock_filters
-    
     if stock1 not in prices.columns or stock2 not in prices.columns:
         return None, None, None
-    
-    key = f"{stock1}-{stock2}"
-    if key not in stock_filters:
-        stock_filters[key] = KalmanFilter(delta=1e-4, R=1.0)
-    
-    kf = stock_filters[key]
-    
-    # Run filter on all data
-    for i in range(len(prices)):
-        y = prices[stock1].iloc[i]
-        x = prices[stock2].iloc[i]
-        kf.update(y, x)
-    
+
+    # Work on aligned, non-NaN data (Kalman can't handle missing obs)
+    pair_prices = prices[[stock1, stock2]].dropna()
+    if len(pair_prices) < STOCK_MIN_BARS:
+        return None, None, None
+
+    if STOCK_SIGNAL_LOOKBACK_BARS and len(pair_prices) > STOCK_SIGNAL_LOOKBACK_BARS:
+        pair_prices = pair_prices.tail(STOCK_SIGNAL_LOOKBACK_BARS)
+
+    # IMPORTANT: build z-score from the latest innovation, not the long-run mean.
+    # Also: do NOT re-feed the same history into a persistent filter on every update,
+    # otherwise z-scores collapse toward 0 and you get no trades.
+    kf = KalmanFilter(delta=1e-4, R=1.0)
+    for i in range(len(pair_prices)):
+        kf.update(float(pair_prices[stock1].iloc[i]), float(pair_prices[stock2].iloc[i]))
+
     return kf.get_zscore(), kf.get_hedge_ratio(), {
-        "price1": float(prices[stock1].iloc[-1]),
-        "price2": float(prices[stock2].iloc[-1])
+        "price1": float(pair_prices[stock1].iloc[-1]),
+        "price2": float(pair_prices[stock2].iloc[-1]),
     }
 
 
@@ -502,6 +654,8 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
     Returns:
         (approved, probability, reason)
     """
+    stress_context = None
+
     # Check Circuit Breaker first
     if circuit_breaker is not None:
         cb_status = circuit_breaker.check_conditions()
@@ -512,6 +666,7 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
         else:
             # Stress market - Gatekeeper ON, safety mode
             triggers = ', '.join(cb_status['triggers'][:2])  # First 2 triggers
+            stress_context = f"({triggers})" if triggers else None
             gk = get_gatekeeper()  # Lazy load Gatekeeper only when needed
             
             if not GATEKEEPER_ENABLED or gk is None:
@@ -527,21 +682,34 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
         return True, 1.0, "Gatekeeper disabled"
     
     try:
-        # For now, use a simplified check based on z-score magnitude
-        # Full integration would pass the feature sequence
-        prob = gk.predict_probability(
-            np.random.randn(1, 50, 15)  # Placeholder - would use real features
-        ) if hasattr(gk, 'predict_probability') else 0.5
-        
-        approved = prob > GATEKEEPER_THRESHOLD
-        
-        if approved:
-            reason = f"🔴 STRESS - NN Approved (prob={prob:.2f})"
-        else:
-            reason = f"🔴 STRESS - NN BLOCKED (prob={prob:.2f})"
-        
-        return approved, prob, reason
-    except Exception as e:
+        # If we have real history, use the Gatekeeper as designed.
+        if isinstance(price_history, dict):
+            spread = price_history.get("spread")
+            zseries = price_history.get("zscore")
+            p1 = price_history.get("price1")
+            p2 = price_history.get("price2")
+            v1 = price_history.get("volume1")
+            v2 = price_history.get("volume2")
+
+            if (
+                isinstance(spread, pd.Series)
+                and isinstance(zseries, pd.Series)
+                and isinstance(p1, pd.Series)
+                and isinstance(p2, pd.Series)
+                and len(spread) >= 50
+            ):
+                prob = float(gk.should_trade(spread, zseries, p1, p2, v1, v2, return_probability=True))
+                approved = prob > GATEKEEPER_THRESHOLD
+                ctx = f" {stress_context}" if stress_context else ""
+                reason = f"{'🟢' if approved else '🔴'} STRESS{ctx} - NN prob={prob:.2f}"
+                return approved, prob, reason
+
+        # No usable feature history wired in → DO NOT use random inputs.
+        # Use a deterministic, conservative stress-mode heuristic.
+        if abs(zscore) > 3.0:
+            return False, 0.3, f"🔴 STRESS{(' ' + stress_context) if stress_context else ''} - Extreme Z blocked (no features)"
+        return True, 0.6, f"🟡 STRESS{(' ' + stress_context) if stress_context else ''} - No features, allowing moderate Z"
+    except Exception:
         # If Gatekeeper fails, be conservative in stress mode
         return abs(zscore) < 3.0, 0.5, f"🟡 NN Error, allowing moderate Z"
 
@@ -553,10 +721,15 @@ def get_position_size(confidence: float, portfolio_cash: float) -> float:
     Higher confidence = larger position.
     Sniper mode: Only take high-confidence shots with appropriate size.
     """
-    for threshold, size_pct in sorted(POSITION_TIERS.items(), reverse=True):
+    size_pct = BASE_POSITION_SIZE
+    for threshold, tier_pct in sorted(POSITION_TIERS.items(), reverse=True):
         if confidence >= threshold:
-            return portfolio_cash * size_pct
-    return portfolio_cash * BASE_POSITION_SIZE  # Fallback
+            size_pct = tier_pct
+            break
+
+    # Enforce hard cap (safety)
+    size_pct = min(size_pct, MAX_POSITION_SIZE)
+    return portfolio_cash * size_pct
 
 
 def execute_trade(portfolio, trades, pair_key, trade_type, zscore, prices, hedge_ratio, market):
@@ -681,8 +854,8 @@ def update_crypto():
         coins.add(pair["coin1"])
         coins.add(pair["coin2"])
     
-    prices = get_crypto_data(list(coins))
-    if prices is None or len(prices) < 30:
+    prices = get_crypto_data(list(coins), period=CRYPTO_DATA_PERIOD, interval=CRYPTO_DATA_INTERVAL)
+    if prices is None or len(prices) < CRYPTO_MIN_BARS:
         return None
     
     signals = []
@@ -706,7 +879,7 @@ def update_crypto():
         
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
-            if abs(zscore) < ZSCORE_EXIT:
+            if abs(zscore) < CRYPTO_ZSCORE_EXIT:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "CLOSE", zscore, current_prices, hedge_ratio, "crypto"
                 )
@@ -714,12 +887,12 @@ def update_crypto():
             else:
                 signal["action"] = f"HOLDING ({pos['type']})"
         else:
-            if zscore > ZSCORE_ENTRY:
+            if zscore > CRYPTO_ZSCORE_ENTRY:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "SELL_SPREAD", zscore, current_prices, hedge_ratio, "crypto"
                 )
                 signal["action"] = "SELL_SPREAD"
-            elif zscore < -ZSCORE_ENTRY:
+            elif zscore < -CRYPTO_ZSCORE_ENTRY:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "BUY_SPREAD", zscore, current_prices, hedge_ratio, "crypto"
                 )
@@ -769,7 +942,7 @@ def update_stocks():
         stocks.add(pair["stock2"])
     
     print(f"   Fetching data for {len(stocks)} stocks...")
-    prices = get_stock_data(list(stocks))
+    prices = get_stock_data(list(stocks), period=STOCK_DATA_PERIOD, interval=STOCK_DATA_INTERVAL)
     if prices is None:
         print("   ⚠️ Failed to fetch stock data - market may be closed")
         # Still update timestamp so we know it tried
@@ -778,8 +951,8 @@ def update_stocks():
         save_portfolio(portfolio, "stocks")
         return portfolio
     
-    if len(prices) < 30:
-        print(f"   ⚠️ Insufficient data: {len(prices)} rows (need 30)")
+    if len(prices) < STOCK_MIN_BARS:
+        print(f"   ⚠️ Insufficient data: {len(prices)} rows (need {STOCK_MIN_BARS})")
         portfolio["last_update"] = datetime.now().isoformat()
         portfolio["signals"] = []
         save_portfolio(portfolio, "stocks")
@@ -812,7 +985,7 @@ def update_stocks():
         
         if pair_key in portfolio["positions"]:
             pos = portfolio["positions"][pair_key]
-            if abs(zscore) < ZSCORE_EXIT:
+            if abs(zscore) < STOCK_ZSCORE_EXIT:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "CLOSE", zscore, current_prices, hedge_ratio, "stocks"
                 )
@@ -820,12 +993,12 @@ def update_stocks():
             else:
                 signal["action"] = f"HOLDING ({pos['type']})"
         else:
-            if zscore > ZSCORE_ENTRY:
+            if zscore > STOCK_ZSCORE_ENTRY:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "SELL_SPREAD", zscore, current_prices, hedge_ratio, "stocks"
                 )
                 signal["action"] = "SELL_SPREAD"
-            elif zscore < -ZSCORE_ENTRY:
+            elif zscore < -STOCK_ZSCORE_ENTRY:
                 portfolio, trades = execute_trade(
                     portfolio, trades, pair_key, "BUY_SPREAD", zscore, current_prices, hedge_ratio, "stocks"
                 )
@@ -958,11 +1131,6 @@ def reset_portfolio(market):
     save_portfolio(portfolio, market)
     save_trades([], market)
     
-    # Reset Kalman filters if stocks
-    if market == "stocks":
-        global stock_filters
-        stock_filters = {}
-    
     return jsonify({"status": "reset", "market": market})
 
 
@@ -1004,66 +1172,95 @@ def get_zscore_history(market, pair):
         return jsonify({"error": "Invalid pair format"}), 400
     
     asset1, asset2 = parts[0], parts[1]
-    
-    # Fetch historical data
+
     if market == "crypto":
-        symbols = [f"{asset1}-USD", f"{asset2}-USD"]
-        try:
-            data = yf.download(symbols, period="60d", progress=False)
-            if isinstance(data.columns, pd.MultiIndex):
-                prices = data['Close']
-            else:
-                prices = data[['Close']]
-            prices.columns = [c.replace('-USD', '') for c in prices.columns]
-        except:
+        prices = get_crypto_data([asset1, asset2], period=CRYPTO_DATA_PERIOD, interval=CRYPTO_DATA_INTERVAL)
+        if prices is None:
             return jsonify({"error": "Failed to fetch data"}), 500
-    else:
-        symbols = [asset1, asset2]
-        try:
-            data = yf.download(symbols, period="60d", progress=False)
-            if isinstance(data.columns, pd.MultiIndex):
-                prices = data['Close']
-            else:
-                prices = data[['Close']]
-        except:
-            return jsonify({"error": "Failed to fetch data"}), 500
-    
-    prices = prices.dropna()
-    if len(prices) < 30:
+
+        prices = prices[[asset1, asset2]].dropna()
+        if len(prices) < max(CRYPTO_MIN_BARS, 30):
+            return jsonify({"error": "Insufficient data"}), 500
+
+        # OLS for hedge ratio
+        y = prices[asset1].values
+        x = prices[asset2].values
+        x_const = add_constant(x)
+        model = OLS(y, x_const).fit()
+        hedge_ratio = model.params[1]
+
+        # Spread and rolling z-score
+        spread = y - hedge_ratio * x
+        spread_series = pd.Series(spread, index=prices.index)
+        rolling_mean = spread_series.rolling(window=30).mean()
+        rolling_std = spread_series.rolling(window=30).std()
+        zscore = (spread_series - rolling_mean) / rolling_std
+
+        zscore_data = []
+        for date, z in zscore.items():
+            if not pd.isna(z):
+                zscore_data.append(
+                    {
+                        "date": date.strftime("%Y-%m-%d"),
+                        "zscore": float(z),
+                    }
+                )
+
+        return jsonify(
+            {
+                "pair": pair,
+                "market": market,
+                "hedge_ratio": float(hedge_ratio),
+                "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
+                "entry_threshold": CRYPTO_ZSCORE_ENTRY,
+                "exit_threshold": CRYPTO_ZSCORE_EXIT,
+                "data": zscore_data[-60:],  # last ~60 points
+            }
+        )
+
+    # market == "stocks": use the same Kalman innovation z-score the bot trades on
+    prices = get_stock_data([asset1, asset2], period=STOCK_DATA_PERIOD, interval=STOCK_DATA_INTERVAL)
+    if prices is None:
+        return jsonify({"error": "Failed to fetch data"}), 500
+
+    prices = prices[[asset1, asset2]].dropna()
+    if len(prices) < STOCK_MIN_BARS:
         return jsonify({"error": "Insufficient data"}), 500
-    
-    # Calculate z-scores
-    y = prices[asset1].values
-    x = prices[asset2].values
-    
-    # OLS for hedge ratio
-    x_const = add_constant(x)
-    model = OLS(y, x_const).fit()
-    hedge_ratio = model.params[1]
-    
-    # Spread and rolling z-score
-    spread = y - hedge_ratio * x
-    spread_series = pd.Series(spread, index=prices.index)
-    rolling_mean = spread_series.rolling(window=30).mean()
-    rolling_std = spread_series.rolling(window=30).std()
-    zscore = (spread_series - rolling_mean) / rolling_std
-    
-    # Prepare response
+
+    if STOCK_SIGNAL_LOOKBACK_BARS and len(prices) > STOCK_SIGNAL_LOOKBACK_BARS:
+        prices = prices.tail(STOCK_SIGNAL_LOOKBACK_BARS)
+
+    kf = KalmanFilter(delta=1e-4, R=1.0)
+    zscores = []
+    hedges = []
+    for i in range(len(prices)):
+        kf.update(float(prices[asset1].iloc[i]), float(prices[asset2].iloc[i]))
+        zscores.append(kf.get_zscore())
+        hedges.append(float(kf.get_hedge_ratio()))
+
+    zscore_series = pd.Series(zscores, index=prices.index)
+    hedge_series = pd.Series(hedges, index=prices.index)
+
     zscore_data = []
-    for i, (date, z) in enumerate(zscore.items()):
-        if not pd.isna(z):
-            zscore_data.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "zscore": float(z)
-            })
-    
-    return jsonify({
-        "pair": pair,
-        "market": market,
-        "hedge_ratio": float(hedge_ratio),
-        "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
-        "data": zscore_data[-30:]  # Last 30 days
-    })
+    for date, z in zscore_series.items():
+        if pd.isna(z):
+            continue
+        # Use ISO timestamps so Plotly can render both daily and intraday.
+        zscore_data.append({"date": date.isoformat(), "zscore": float(z)})
+
+    tail_n = 300 if STOCK_DATA_INTERVAL not in (None, "1d") else 90
+
+    return jsonify(
+        {
+            "pair": pair,
+            "market": market,
+            "hedge_ratio": float(hedge_series.iloc[-1]) if len(hedge_series) else 0.0,
+            "current_zscore": float(zscore_series.iloc[-1]) if len(zscore_series) else 0.0,
+            "entry_threshold": STOCK_ZSCORE_ENTRY,
+            "exit_threshold": STOCK_ZSCORE_EXIT,
+            "data": zscore_data[-tail_n:],
+        }
+    )
 
 
 @app.route('/api/circuit_breaker')
@@ -1204,9 +1401,9 @@ if __name__ == '__main__':
     print("="*60)
     print(f"   Crypto Pairs: {len(CRYPTO_PAIRS)} (OLS Z-score)")
     print(f"   Stock Pairs: {len(STOCK_PAIRS)} (Kalman Filter)")
-    print(f"   Initial Capital: ${INITIAL_CAPITAL:,} per market")
-    if GATEKEEPER_ENABLED and gatekeeper is not None:
-        print(f"   🧠 Gatekeeper: ACTIVE (threshold={GATEKEEPER_THRESHOLD})")
+    print(f"   Initial Capital: ${int(INITIAL_CAPITAL):,} per market")
+    if GATEKEEPER_ENABLED and _gatekeeper_available:
+        print(f"   🧠 Gatekeeper: ENABLED (lazy-load, threshold={GATEKEEPER_THRESHOLD})")
     else:
         print(f"   ⚠️ Gatekeeper: DISABLED")
     print("="*60)
