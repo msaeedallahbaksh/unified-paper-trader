@@ -387,6 +387,18 @@
       background: rgba(255, 255, 255, 0.06);
     }
 
+    /* Some browsers render <select> dropdowns with a light popup background.
+       Ensure options stay readable (avoid white-on-white). */
+    select.select {
+      color-scheme: dark;
+    }
+    select.select option,
+    select.select optgroup {
+      background: #ffffff;
+      color: #111111;
+      -webkit-text-fill-color: #111111;
+    }
+
     /* Lists */
     .list-item {
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -803,6 +815,36 @@
       stocks: { portfolio: null, trades: [], signals: [] },
     };
 
+    // Full pair universes for the Z-score dropdown (ensures all pairs show up)
+    const pairUniverse = { crypto: [], stocks: [] };
+
+    async function loadPairUniverse() {
+      try {
+        const [stocksRes, cryptoRes] = await Promise.all([
+          fetch('/api/pairs'),
+          fetch('/api/pairs/crypto'),
+        ]);
+
+        const stocksData = await stocksRes.json();
+        const cryptoData = await cryptoRes.json();
+
+        if (stocksData && Array.isArray(stocksData.pairs)) {
+          pairUniverse.stocks = stocksData.pairs
+            .map(p => `${p.stock1}-${p.stock2}`)
+            .filter(Boolean);
+        }
+
+        if (cryptoData && Array.isArray(cryptoData.pairs)) {
+          pairUniverse.crypto = cryptoData.pairs
+            .map(p => p.pair || `${p.coin1}-${p.coin2}`)
+            .filter(Boolean);
+        }
+      } catch (e) {
+        // Non-fatal: we still fall back to signals/trades/positions.
+        console.warn('Failed to load pair universe', e);
+      }
+    }
+
     function showToast(title, message, variant = 'info', ttlMs = 4500) {
       const stack = document.getElementById('toast-stack');
       const el = document.createElement('div');
@@ -1034,22 +1076,24 @@
         const z = Number(sig.zscore);
         const zStr = Number.isFinite(z) ? z.toFixed(2) : '--';
 
-        const extra = [];
-        if (sig.cluster) extra.push(escapeHtml(sig.cluster));
-        if (sig.edge_prob !== undefined && sig.edge_prob !== null) extra.push(`edge=${Number(sig.edge_prob).toFixed(2)}`);
+      const metaParts = [];
+      if (sig.cluster) metaParts.push(escapeHtml(sig.cluster));
+      const edgeHtml = (sig.edge_prob !== undefined && sig.edge_prob !== null)
+        ? `<span class="badge neutral" title="Edge model probability">edge ${Number(sig.edge_prob).toFixed(2)}</span>`
+        : '';
 
         return `
           <div class="signal-card" onclick="selectPairForChart('${market}', '${sig.pair}')" title="Click to open in Z-Score chart">
             <div class="signal-head">
               <div>
                 <div class="signal-pair">${pair}</div>
-                <div class="signal-method">${method}${extra.length ? ` • ${extra.join(' • ')}` : ''}</div>
+                <div class="signal-method">${method}${metaParts.length ? ` • ${metaParts.join(' • ')}` : ''}</div>
               </div>
               ${badgeForAction(action)}
             </div>
             <div class="signal-zscore" style="color: ${zColor(z)};">${zStr}</div>
             <div class="signal-foot">
-              <div class="subtext">${escapeHtml(action)}</div>
+              <div class="subtext">${edgeHtml}</div>
               <div class="subtext" style="font-family: var(--mono);">|Z|=${Number.isFinite(z) ? Math.abs(z).toFixed(2) : '--'}</div>
             </div>
           </div>
@@ -1080,12 +1124,13 @@
         const pnlClass = pnl !== null && pnl !== undefined ? (Number(pnl) >= 0 ? 'positive' : 'negative') : '';
         const pnlText = pnl !== null && pnl !== undefined ? `${Number(pnl) >= 0 ? '+' : ''}${formatCurrency(pnl)}` : '--';
         const action = t.action || t.type || t.trade_type || '—';
+        const reason = t.close_reason || '';
 
         return `
           <div class="list-item">
             <div>
               <div class="item-pair">${escapeHtml(t.pair || '')}</div>
-              <div class="subtext">${formatDateTime(t.time)} • ${badgeForAction(action)} <span style="margin-left: 8px;">${escapeHtml(String(action))}</span></div>
+              <div class="subtext">${formatDateTime(t.time)} • ${badgeForAction(action)}${reason ? ` <span style="margin-left: 8px;">${escapeHtml(reason)}</span>` : ''}</div>
             </div>
             <div class="item-value ${pnlClass}">${pnlText}</div>
           </div>
@@ -1093,7 +1138,7 @@
       }).join('');
     }
 
-    function updatePairOptions() {
+    async function updatePairOptions() {
       const market = document.getElementById('chart-market').value;
       const pairSelect = document.getElementById('chart-pair');
 
@@ -1101,6 +1146,9 @@
       const signals = marketState[market]?.signals || [];
       const trades = marketState[market]?.trades || [];
       const positions = marketState[market]?.portfolio?.positions || {};
+
+      // Add full universe first (so even pairs with missing data show up)
+      (pairUniverse[market] || []).forEach(p => pairs.add(p));
 
       signals.forEach(s => pairs.add(s.pair));
       trades.forEach(t => pairs.add(t.pair));
@@ -1125,7 +1173,7 @@
     function selectPairForChart(market, pair) {
       const marketSel = document.getElementById('chart-market');
       marketSel.value = market;
-      updatePairOptions();
+      updatePairOptions().catch(() => {});
 
       const pairSel = document.getElementById('chart-pair');
       pairSel.value = pair;
@@ -1183,11 +1231,13 @@
       renderTrades(market);
 
       // Chart pairs
-      updatePairOptions();
+      updatePairOptions().catch(() => {});
     }
 
     async function loadAllData() {
       try {
+        // Pair universe once (for full dropdown population)
+        await loadPairUniverse();
         await loadSummary();
         await loadMarketData('crypto');
         await loadMarketData('stocks');
@@ -1341,7 +1391,7 @@
 
     // Boot
     document.getElementById('btn-refresh-pairs').style.display = 'none';
-    updatePairOptions();
+    loadPairUniverse().then(() => updatePairOptions()).catch(() => {});
     loadAllData();
     setInterval(loadAllData, 30000);
   </script>

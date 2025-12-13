@@ -1762,6 +1762,43 @@ def get_pairs_info():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/pairs/crypto')
+def get_crypto_pairs_info():
+    """Get current crypto pairs (configured + open positions)."""
+    try:
+        portfolio = load_portfolio("crypto")
+
+        pairs = []
+        seen = set()
+
+        for p in CRYPTO_PAIRS:
+            coin1 = p.get("coin1")
+            coin2 = p.get("coin2")
+            if not coin1 or not coin2:
+                continue
+            pair_key = f"{coin1}-{coin2}"
+            if pair_key in seen:
+                continue
+            seen.add(pair_key)
+            pairs.append({"pair": pair_key, "coin1": coin1, "coin2": coin2})
+
+        for pair_key in (portfolio.get("positions") or {}).keys():
+            if pair_key in seen:
+                continue
+            if "-" not in pair_key:
+                continue
+            parts = pair_key.split("-")
+            if len(parts) != 2:
+                continue
+            coin1, coin2 = parts[0], parts[1]
+            seen.add(pair_key)
+            pairs.append({"pair": pair_key, "coin1": coin1, "coin2": coin2})
+
+        return jsonify({"pairs_count": len(pairs), "pairs": pairs})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/pairs/refresh', methods=['POST'])
 def trigger_pair_refresh():
     """Manually trigger pair refresh (runs in background)."""
