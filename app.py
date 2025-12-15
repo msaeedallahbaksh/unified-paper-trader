@@ -95,27 +95,32 @@ app = Flask(__name__)
 INITIAL_CAPITAL = float(os.environ.get("INITIAL_CAPITAL", "10000"))
 BASE_POSITION_SIZE = float(os.environ.get("BASE_POSITION_SIZE", "0.10"))  # fallback sizing
 
-# Separate thresholds for crypto vs stocks (stocks often need lower thresholds or faster bars)
+# Separate thresholds for crypto vs stocks
+# Higher entry threshold = fewer but higher-quality signals
 CRYPTO_ZSCORE_ENTRY = float(os.environ.get("CRYPTO_ZSCORE_ENTRY", "2.0"))
 CRYPTO_ZSCORE_EXIT = float(os.environ.get("CRYPTO_ZSCORE_EXIT", "0.5"))
-STOCK_ZSCORE_ENTRY = float(os.environ.get("STOCK_ZSCORE_ENTRY", "1.5"))
-STOCK_ZSCORE_EXIT = float(os.environ.get("STOCK_ZSCORE_EXIT", "0.5"))
+STOCK_ZSCORE_ENTRY = float(os.environ.get("STOCK_ZSCORE_ENTRY", "2.0"))  # Raised from 1.5 to 2.0
+STOCK_ZSCORE_EXIT = float(os.environ.get("STOCK_ZSCORE_EXIT", "0.3"))   # Tighter exit for mean reversion
 
 # Risk controls (paper trading realism + survival)
 TRADING_COST_BPS = float(os.environ.get("TRADING_COST_BPS", "2.0"))  # per open/close on gross notional
 CRYPTO_STOP_ZSCORE = float(os.environ.get("CRYPTO_STOP_ZSCORE", "4.0"))
 STOCK_STOP_ZSCORE = float(os.environ.get("STOCK_STOP_ZSCORE", "3.5"))
 
-CRYPTO_STOP_LOSS_PCT = float(os.environ.get("CRYPTO_STOP_LOSS_PCT", "0.06"))  # -6%
-STOCK_STOP_LOSS_PCT = float(os.environ.get("STOCK_STOP_LOSS_PCT", "0.04"))    # -4%
-CRYPTO_TAKE_PROFIT_PCT = float(os.environ.get("CRYPTO_TAKE_PROFIT_PCT", "0.05"))
-STOCK_TAKE_PROFIT_PCT = float(os.environ.get("STOCK_TAKE_PROFIT_PCT", "0.03"))
+# Risk Management: STOP_LOSS should be SMALLER than TAKE_PROFIT for positive expectancy!
+# Old (bad): stop=4%, take=3% -> losses 2x bigger than wins
+# Fixed: stop=2%, take=4% -> wins 2x bigger than losses
+CRYPTO_STOP_LOSS_PCT = float(os.environ.get("CRYPTO_STOP_LOSS_PCT", "0.04"))  # -4%
+STOCK_STOP_LOSS_PCT = float(os.environ.get("STOCK_STOP_LOSS_PCT", "0.02"))    # -2% (tight stop)
+CRYPTO_TAKE_PROFIT_PCT = float(os.environ.get("CRYPTO_TAKE_PROFIT_PCT", "0.06"))  # +6%
+STOCK_TAKE_PROFIT_PCT = float(os.environ.get("STOCK_TAKE_PROFIT_PCT", "0.04"))    # +4% (let winners run)
 
 CRYPTO_MAX_HOLDING_HOURS = float(os.environ.get("CRYPTO_MAX_HOLDING_HOURS", "168"))  # 7 days
 STOCK_MAX_HOLDING_HOURS = float(os.environ.get("STOCK_MAX_HOLDING_HOURS", "72"))    # 3 days
 
-MAX_OPEN_POSITIONS_CRYPTO = int(os.environ.get("MAX_OPEN_POSITIONS_CRYPTO", "6"))
-MAX_OPEN_POSITIONS_STOCKS = int(os.environ.get("MAX_OPEN_POSITIONS_STOCKS", "8"))
+# Limit open positions to avoid over-trading and concentration risk
+MAX_OPEN_POSITIONS_CRYPTO = int(os.environ.get("MAX_OPEN_POSITIONS_CRYPTO", "4"))
+MAX_OPEN_POSITIONS_STOCKS = int(os.environ.get("MAX_OPEN_POSITIONS_STOCKS", "4"))  # Reduced from 8 to 4
 
 # Data settings (yfinance)
 CRYPTO_DATA_PERIOD = os.environ.get("CRYPTO_DATA_PERIOD", "60d")

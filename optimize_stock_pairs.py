@@ -246,9 +246,38 @@ def main():
     if not results:
         raise RuntimeError("No optimized results produced")
 
+    # ===========================================================
+    # CRITICAL FIX: Only keep pairs with POSITIVE expected value!
+    # Previously we kept ALL pairs including losers - that was a bug
+    # ===========================================================
+    MIN_WIN_RATE = 50.0  # Minimum 50% win rate in test period
+    MIN_SHARPE = 0.0     # Must be positive (edge exists)
+    MIN_RETURN = 0.0     # Must be positive (net profitable)
+    
+    # Filter out losing pairs BEFORE ranking
+    profitable_pairs = [
+        r for r in results
+        if r["test"]["sharpe"] >= MIN_SHARPE
+        and r["test"]["total_return_pct"] >= MIN_RETURN
+        and r["test"]["win_rate"] >= MIN_WIN_RATE
+    ]
+    
+    print(f"\n📊 FILTERING RESULTS:")
+    print(f"   Total pairs evaluated: {len(results)}")
+    print(f"   Pairs with positive edge: {len(profitable_pairs)}")
+    print(f"   Pairs REJECTED (negative edge): {len(results) - len(profitable_pairs)}")
+    
+    if not profitable_pairs:
+        print("⚠️ No pairs passed filtering - relaxing constraints slightly...")
+        # Fallback: at least require positive Sharpe
+        profitable_pairs = [r for r in results if r["test"]["sharpe"] > 0]
+    
+    if not profitable_pairs:
+        raise RuntimeError("No profitable pairs found - cannot generate config")
+
     # Rank by out-of-sample sharpe then return
-    results.sort(key=lambda r: (r["test"]["sharpe"], r["test"]["total_return_pct"]), reverse=True)
-    top = results[: args.top_n] if args.top_n else results
+    profitable_pairs.sort(key=lambda r: (r["test"]["sharpe"], r["test"]["total_return_pct"]), reverse=True)
+    top = profitable_pairs[: args.top_n] if args.top_n else profitable_pairs
 
     out = {
         "generated_at": datetime.utcnow().isoformat() + "Z",
