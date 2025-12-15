@@ -334,8 +334,14 @@ def update_last_update(market: str):
 # POSITION OPERATIONS
 # ============================================================
 def add_position(market: str, pair: str, position_type: str, entry_price: float,
-                 entry_zscore: float, hedge_ratio: float, size: float):
-    """Add or update a position."""
+                 entry_zscore: float, hedge_ratio: float, size: float,
+                 entry_prices: dict = None, qty1: float = None, qty2: float = None):
+    """Add or update a position.
+    
+    Args:
+        entry_prices: dict with price1, price2 - the actual entry prices for PnL calculation
+        qty1, qty2: quantities of each leg for accurate PnL
+    """
     if not DATABASE_AVAILABLE:
         data = _load_json(f"portfolio_{market}.json")
         data['positions'][pair] = {
@@ -344,6 +350,9 @@ def add_position(market: str, pair: str, position_type: str, entry_price: float,
             'entry_zscore': entry_zscore,
             'hedge_ratio': hedge_ratio,
             'size': size,
+            'entry_prices': entry_prices or {},  # Store for PnL calculation
+            'qty1': qty1,
+            'qty2': qty2,
             'entry_time': datetime.now().isoformat()
         }
         _save_json(f"portfolio_{market}.json", data)
@@ -351,9 +360,12 @@ def add_position(market: str, pair: str, position_type: str, entry_price: float,
     
     conn = get_connection()
     if conn is None:
-        return add_position(market, pair, position_type, entry_price, entry_zscore, hedge_ratio, size)
+        return add_position(market, pair, position_type, entry_price, entry_zscore, hedge_ratio, size,
+                          entry_prices, qty1, qty2)
     
     cur = conn.cursor()
+    # Store entry_prices as JSON in the reason field or create a new column
+    # For now, we'll store essential data in existing columns
     cur.execute("""
         INSERT INTO positions (market, pair, position_type, entry_price, entry_zscore, hedge_ratio, size)
         VALUES (%s, %s, %s, %s, %s, %s, %s)

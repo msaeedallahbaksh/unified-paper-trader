@@ -466,7 +466,9 @@ def load_portfolio(market="crypto"):
                     'hedge_ratio': pos.get('hedge_ratio', 0),
                     'entry_prices': pos.get('entry_prices', {}),
                     'entry_time': pos.get('entry_time'),
-                    'position_value': pos.get('size', pos.get('position_value', 0))
+                    'position_value': pos.get('size', pos.get('position_value', 0)),
+                    'qty1': pos.get('qty1'),
+                    'qty2': pos.get('qty2'),
                 }
             
             # Convert signals dict to list format for frontend
@@ -931,33 +933,49 @@ def calculate_unrealized_pnl(pos: dict, current_prices: dict) -> tuple[float, fl
         qty1 = pos.get("qty1")
         qty2 = pos.get("qty2")
 
+        p1e = float(entry.get("price1", 0.0) or 0.0)
+        p2e = float(entry.get("price2", 0.0) or 0.0)
+        p1c = float(current_prices.get("price1", 0.0) or 0.0)
+        p2c = float(current_prices.get("price2", 0.0) or 0.0)
+
         # Preferred: leg-level PnL (realistic)
         if qty1 is not None and qty2 is not None:
             qty1 = float(qty1)
             qty2 = float(qty2)
-            p1e = float(entry.get("price1", 0.0) or 0.0)
-            p2e = float(entry.get("price2", 0.0) or 0.0)
-            p1c = float(current_prices.get("price1", 0.0) or 0.0)
-            p2c = float(current_prices.get("price2", 0.0) or 0.0)
             pnl = qty1 * (p1c - p1e) + qty2 * (p2c - p2e)
             return pnl, (pnl / position_value) * 100.0
 
-        # Fallback: spread-return approximation (legacy)
-        entry_spread = float(pos.get("entry_spread", 0.0) or 0.0)
+        # Fallback: Reconstruct quantities from position_value and entry prices
+        # This is needed when loading from DB which doesn't store qty1/qty2
         hedge_ratio = float(pos.get("hedge_ratio", 0.0) or 0.0)
-        exit_spread = float(current_prices.get("price1", 0.0) or 0.0) - hedge_ratio * float(current_prices.get("price2", 0.0) or 0.0)
+        
+        if p1e > 0 and p2e > 0:
+            # Reconstruct the k factor used during position opening
+            denom = max(p1e + abs(hedge_ratio) * p2e, 1e-8)
+            k = float(position_value) / denom
+            
+            if pos.get("type") == "BUY_SPREAD":
+                qty1 = k
+                qty2 = -k * hedge_ratio
+            else:  # SELL_SPREAD
+                qty1 = -k
+                qty2 = k * hedge_ratio
+            
+            pnl = qty1 * (p1c - p1e) + qty2 * (p2c - p2e)
+            # Sanity check: PnL should never exceed 50% of position value in either direction
+            # for a pairs trade (they hedge each other)
+            max_reasonable_pnl = position_value * 0.5
+            if abs(pnl) > max_reasonable_pnl:
+                print(f"⚠️ PnL sanity check failed: {pnl:.2f} > {max_reasonable_pnl:.2f}, clamping")
+                pnl = max(-max_reasonable_pnl, min(max_reasonable_pnl, pnl))
+            
+            return pnl, (pnl / position_value) * 100.0
 
-        if entry_spread == 0:
-            return 0.0, 0.0
-
-        if pos.get("type") == "BUY_SPREAD":
-            spread_return = (exit_spread - entry_spread) / abs(entry_spread)
-        else:
-            spread_return = (entry_spread - exit_spread) / abs(entry_spread)
-
-        pnl = position_value * spread_return
-        return pnl, spread_return * 100.0
-    except Exception:
+        # Last resort: no valid entry prices, return 0
+        print(f"⚠️ Cannot calculate PnL: missing entry prices for position")
+        return 0.0, 0.0
+    except Exception as e:
+        print(f"⚠️ PnL calculation error: {e}")
         return 0.0, 0.0
 
 
@@ -1069,7 +1087,8 @@ def execute_trade(
         if USE_DATABASE:
             try:
                 db_add_position(market, pair_key, trade_type, float(spread_value), 
-                               float(zscore), float(hedge_ratio), position_value)
+                               float(zscore), float(hedge_ratio), position_value,
+                               entry_prices=prices, qty1=float(qty1), qty2=float(qty2))
                 db_update_cash(market, portfolio["cash"])
                 db_add_trade(market, pair_key, trade_type, float(zscore), float(hedge_ratio),
                             float(spread_value), prices, trade_record.get("reason", ""),
