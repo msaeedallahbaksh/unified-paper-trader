@@ -1204,8 +1204,14 @@ def update_crypto():
             age_hours = (datetime.now() - _safe_fromiso(pos.get("entry_time", ""))).total_seconds() / 3600.0
 
             close_reason = None
-            if abs(zscore) < CRYPTO_ZSCORE_EXIT:
-                close_reason = f"EXIT_Z (|z|<{CRYPTO_ZSCORE_EXIT})"
+            
+            # EXIT_Z: Only exit on Z-score mean reversion if we're NOT losing money!
+            # Crypto uses OLS (static regression) so this is less of an issue than Kalman,
+            # but still apply the same protection for consistency.
+            MIN_PNL_FOR_Z_EXIT = -1.0  # Only exit on Z if losing < 1%
+            
+            if abs(zscore) < CRYPTO_ZSCORE_EXIT and pnl_pct >= MIN_PNL_FOR_Z_EXIT:
+                close_reason = f"EXIT_Z (|z|<{CRYPTO_ZSCORE_EXIT}, pnl={pnl_pct:.1f}%)"
             elif abs(zscore) > CRYPTO_STOP_ZSCORE:
                 close_reason = f"STOP_Z (|z|>{CRYPTO_STOP_ZSCORE})"
             elif pnl_pct <= -CRYPTO_STOP_LOSS_PCT * 100.0:
@@ -1359,8 +1365,17 @@ def update_stocks():
             age_hours = (datetime.now() - _safe_fromiso(pos.get("entry_time", ""))).total_seconds() / 3600.0
 
             close_reason = None
-            if abs(zscore) < exit_th:
-                close_reason = f"EXIT_Z (|z|<{exit_th})"
+            
+            # EXIT_Z: Only exit on Z-score mean reversion if we're NOT losing money!
+            # The Kalman filter's mean can drift, making Z converge to 0 even while
+            # the position is underwater. So we require:
+            # 1. Z has converged (|z| < exit threshold)
+            # 2. AND we're not losing more than 1% (allows for trading costs)
+            # This prevents exiting "at the mean" when the mean has shifted against us.
+            MIN_PNL_FOR_Z_EXIT = -1.0  # Only exit on Z if losing < 1%
+            
+            if abs(zscore) < exit_th and pnl_pct >= MIN_PNL_FOR_Z_EXIT:
+                close_reason = f"EXIT_Z (|z|<{exit_th}, pnl={pnl_pct:.1f}%)"
             elif abs(zscore) > stop_z:
                 close_reason = f"STOP_Z (|z|>{stop_z})"
             elif pnl_pct <= -STOCK_STOP_LOSS_PCT * 100.0:
