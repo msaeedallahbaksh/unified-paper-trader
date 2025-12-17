@@ -945,15 +945,30 @@
       if (!isoString) return '--';
       const d = new Date(isoString);
       if (Number.isNaN(d.getTime())) return String(isoString);
-      return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        }
+      // Convert to EST/EDT (America/New_York)
+      return d.toLocaleString('en-US', { 
+        timeZone: 'America/New_York',
+        year: 'numeric', 
+        month: 'short', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true
+      }) + ' ET';
+    }
 
-        function formatTime(isoString) {
-            if (!isoString) return '--';
+    function formatTime(isoString) {
+      if (!isoString) return '--';
       const d = new Date(isoString);
       if (Number.isNaN(d.getTime())) return String(isoString);
-      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-        }
+      // Convert to EST/EDT (America/New_York)
+      return d.toLocaleTimeString('en-US', { 
+        timeZone: 'America/New_York',
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true
+      }) + ' ET';
+    }
 
     function badgeForAction(action) {
       const a = String(action || '').toUpperCase();
