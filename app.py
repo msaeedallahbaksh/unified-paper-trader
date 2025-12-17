@@ -614,13 +614,13 @@ def load_trades(market="crypto"):
     file = DATA_DIR / f"trades_{market}.json"
     if file.exists():
         try:
-        with open(file, 'r') as f:
+            with open(file, 'r') as f:
                 json_trades = _normalize_trades(json.load(f))
         except Exception as e:
             print(f"⚠️ JSON trades load failed: {e}")
 
     if not db_trades and not json_trades:
-    return []
+        return []
 
     if db_trades and not json_trades:
         return db_trades
@@ -876,10 +876,10 @@ def check_gatekeeper(pair_key, zscore, prices, hedge_ratio, market, price_histor
                 and len(spread) >= 50
             ):
                 prob = float(gk.should_trade(spread, zseries, p1, p2, v1, v2, return_probability=True))
-        approved = prob > GATEKEEPER_THRESHOLD
+                approved = prob > GATEKEEPER_THRESHOLD
                 ctx = f" {stress_context}" if stress_context else ""
                 reason = f"{'🟢' if approved else '🔴'} STRESS{ctx} - NN prob={prob:.2f}"
-        return approved, prob, reason
+                return approved, prob, reason
 
         # No usable feature history wired in → DO NOT use random inputs.
         # Use a deterministic, conservative stress-mode heuristic.
@@ -906,7 +906,7 @@ def get_position_size(confidence: float, portfolio_cash: float) -> float:
 
     # Enforce hard cap (safety)
     size_pct = min(size_pct, MAX_POSITION_SIZE)
-            return portfolio_cash * size_pct
+    return portfolio_cash * size_pct
 
 
 def _safe_fromiso(dt_str: str) -> datetime:
@@ -1639,38 +1639,38 @@ def get_zscore_history(market, pair):
     
         prices = prices[[asset1, asset2]].dropna()
         if len(prices) < max(CRYPTO_MIN_BARS, 30):
-        return jsonify({"error": "Insufficient data"}), 500
+            return jsonify({"error": "Insufficient data"}), 500
     
         # OLS for hedge ratio
-    y = prices[asset1].values
-    x = prices[asset2].values
-    x_const = add_constant(x)
-    model = OLS(y, x_const).fit()
-    hedge_ratio = model.params[1]
+        y = prices[asset1].values
+        x = prices[asset2].values
+        x_const = add_constant(x)
+        model = OLS(y, x_const).fit()
+        hedge_ratio = model.params[1]
     
-    # Spread and rolling z-score
-    spread = y - hedge_ratio * x
-    spread_series = pd.Series(spread, index=prices.index)
-    rolling_mean = spread_series.rolling(window=30).mean()
-    rolling_std = spread_series.rolling(window=30).std()
-    zscore = (spread_series - rolling_mean) / rolling_std
+        # Spread and rolling z-score
+        spread = y - hedge_ratio * x
+        spread_series = pd.Series(spread, index=prices.index)
+        rolling_mean = spread_series.rolling(window=30).mean()
+        rolling_std = spread_series.rolling(window=30).std()
+        zscore = (spread_series - rolling_mean) / rolling_std
     
-    zscore_data = []
+        zscore_data = []
         for date, z in zscore.items():
-        if not pd.isna(z):
+            if not pd.isna(z):
                 zscore_data.append(
                     {
-                "date": date.strftime("%Y-%m-%d"),
+                        "date": date.strftime("%Y-%m-%d"),
                         "zscore": float(z),
                     }
                 )
     
         return jsonify(
             {
-        "pair": pair,
-        "market": market,
-        "hedge_ratio": float(hedge_ratio),
-        "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
+                "pair": pair,
+                "market": market,
+                "hedge_ratio": float(hedge_ratio),
+                "current_zscore": float(zscore.iloc[-1]) if not pd.isna(zscore.iloc[-1]) else 0,
                 "entry_threshold": CRYPTO_ZSCORE_ENTRY,
                 "exit_threshold": CRYPTO_ZSCORE_EXIT,
                 "data": zscore_data[-60:],  # last ~60 points
