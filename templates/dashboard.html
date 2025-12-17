@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="color-scheme" content="dark" />
   <title>Unified Trading Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <style>
-    :root {
+    <style>
+        :root {
       --bg: #07070b;
       --bg-elev-1: rgba(255, 255, 255, 0.035);
       --bg-elev-2: rgba(255, 255, 255, 0.06);
@@ -36,15 +36,15 @@
 
       --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: 'Outfit', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-    }
+        }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    body {
+        body {
       font-family: var(--sans);
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+            min-height: 100vh;
       overflow-x: hidden;
     }
 
@@ -58,13 +58,13 @@
         radial-gradient(900px 500px at 85% 25%, rgba(32, 245, 166, 0.14), transparent 60%),
         radial-gradient(1100px 700px at 55% 95%, rgba(247, 147, 26, 0.12), transparent 65%);
       opacity: 0.9;
-    }
+        }
 
-    .container {
+        .container {
       max-width: 1320px;
-      margin: 0 auto;
+            margin: 0 auto;
       padding: 26px 18px 40px;
-    }
+        }
 
     .card {
       border: 1px solid var(--stroke);
@@ -91,13 +91,13 @@
       flex-direction: column;
       gap: 4px;
       min-width: 260px;
-    }
+        }
 
     .brand-title {
       font-size: 1.15rem;
       letter-spacing: 0.2px;
       font-weight: 800;
-    }
+        }
 
     .brand-subtitle {
       font-size: 0.9rem;
@@ -105,10 +105,10 @@
     }
 
     .topbar-meta {
-      display: flex;
+            display: flex;
       gap: 12px;
       align-items: center;
-      justify-content: center;
+            justify-content: center;
       flex: 1;
       min-width: 240px;
       flex-wrap: wrap;
@@ -148,11 +148,11 @@
 
     .topbar-actions {
       display: flex;
-      gap: 10px;
+            gap: 10px;
       align-items: center;
       flex-wrap: wrap;
       justify-content: flex-end;
-    }
+        }
 
     .btn {
       appearance: none;
@@ -160,8 +160,8 @@
       background: rgba(0, 0, 0, 0.28);
       color: var(--text);
       padding: 10px 14px;
-      border-radius: 12px;
-      cursor: pointer;
+            border-radius: 12px;
+            cursor: pointer;
       font-weight: 700;
       transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
       display: inline-flex;
@@ -169,13 +169,13 @@
       align-items: center;
       justify-content: center;
       user-select: none;
-    }
+        }
 
     .btn:hover {
       transform: translateY(-1px);
       border-color: var(--stroke-strong);
       background: rgba(255, 255, 255, 0.06);
-    }
+        }
 
     .btn:active { transform: translateY(0px); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
@@ -194,7 +194,7 @@
       border-color: transparent;
       background: transparent;
       color: var(--muted);
-    }
+        }
 
     .btn-ghost:hover {
       border-color: var(--stroke);
@@ -203,14 +203,14 @@
     }
 
     /* Summary */
-    .summary-bar {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+        .summary-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
       gap: 14px;
       margin: 18px 0;
-    }
+        }
 
-    .summary-card {
+        .summary-card {
       padding: 16px;
       position: relative;
       overflow: hidden;
@@ -223,32 +223,32 @@
       background: radial-gradient(700px 180px at 10% 10%, rgba(255, 255, 255, 0.12), transparent 70%);
       opacity: 0.6;
       pointer-events: none;
-    }
+        }
 
     .summary-card.crypto { border-left: 3px solid rgba(247, 147, 26, 0.85); }
     .summary-card.stocks { border-left: 3px solid rgba(0, 212, 170, 0.85); }
     .summary-card.combined { border-left: 3px solid rgba(90, 166, 255, 0.85); }
 
-    .summary-label {
+        .summary-label {
       font-size: 0.78rem;
-      text-transform: uppercase;
+            text-transform: uppercase;
       letter-spacing: 0.12em;
       color: var(--muted);
-    }
+        }
 
-    .summary-value {
+        .summary-value {
       font-family: var(--mono);
       font-weight: 900;
       font-size: 1.35rem;
       margin-top: 10px;
-    }
+        }
 
-    .summary-pnl {
+        .summary-pnl {
       font-family: var(--mono);
       font-size: 0.92rem;
       margin-top: 6px;
       color: var(--muted);
-    }
+        }
 
     .positive { color: var(--good) !important; }
     .negative { color: var(--bad) !important; }
@@ -304,70 +304,70 @@
     .health-banner.show { display: block; }
 
     /* Content */
-    .content { display: none; }
-    .content.active { display: block; }
+        .content { display: none; }
+        .content.active { display: block; }
 
     /* Metrics */
-    .metrics-grid {
-      display: grid;
+        .metrics-grid {
+            display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 12px;
       margin-bottom: 16px;
-    }
+        }
 
-    .metric-card {
+        .metric-card {
       padding: 14px;
-    }
+        }
 
-    .metric-label {
+        .metric-label {
       font-size: 0.75rem;
       letter-spacing: 0.12em;
-      text-transform: uppercase;
+            text-transform: uppercase;
       color: var(--muted);
-    }
+        }
 
-    .metric-value {
+        .metric-value {
       margin-top: 10px;
       font-family: var(--mono);
       font-size: 1.35rem;
       font-weight: 900;
-    }
+        }
 
     /* Sections */
-    .grid-2 {
-      display: grid;
+        .grid-2 {
+            display: grid;
       grid-template-columns: 1.1fr 0.9fr;
       gap: 14px;
       margin-bottom: 14px;
-    }
+        }
 
-    .section {
+        .section {
       padding: 16px;
-    }
+        }
 
-    .section-title {
-      display: flex;
-      align-items: center;
+        .section-title {
+            display: flex;
+            align-items: center;
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 12px;
       font-size: 0.98rem;
       font-weight: 800;
       letter-spacing: 0.2px;
-    }
+        }
 
     .section-title small {
       color: var(--muted);
       font-weight: 700;
       font-size: 0.82rem;
-    }
+        }
 
     .toolbar {
       display: flex;
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-    }
+        }
 
     .input, .select {
       border: 1px solid var(--stroke);
@@ -400,27 +400,27 @@
     }
 
     /* Lists */
-    .list-item {
+        .list-item {
       border: 1px solid rgba(255, 255, 255, 0.06);
       background: rgba(0, 0, 0, 0.18);
       border-radius: 14px;
       padding: 12px;
-      margin-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
       gap: 14px;
     }
 
     .list-item:hover {
       border-color: rgba(255, 255, 255, 0.12);
       background: rgba(255, 255, 255, 0.05);
-    }
+        }
 
-    .item-pair {
+        .item-pair {
       font-weight: 900;
       letter-spacing: 0.2px;
-    }
+        }
 
     .badge {
       display: inline-flex;
@@ -442,16 +442,64 @@
     .badge.neutral { border-color: rgba(255, 255, 255, 0.12); color: var(--muted); }
     .badge.blocked { border-color: rgba(255, 204, 102, 0.28); color: var(--warn); background: rgba(255, 204, 102, 0.10); }
 
-    .item-value {
+        .item-value {
       font-family: var(--mono);
-      text-align: right;
+            text-align: right;
       font-weight: 900;
-    }
+        }
 
     .subtext {
       margin-top: 4px;
       color: var(--muted);
       font-size: 0.82rem;
+        }
+
+    /* Trade Details */
+    .trade-item {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .trade-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .trade-time {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .trade-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 6px 16px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+      margin-top: 4px;
+    }
+
+    .trade-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trade-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .trade-value {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      font-weight: 600;
     }
 
     /* Signals */
@@ -471,16 +519,16 @@
     }
 
     .signal-head {
-      display: flex;
+            display: flex;
       justify-content: space-between;
       align-items: start;
-      gap: 10px;
+            gap: 10px;
     }
 
     .signal-pair {
       font-weight: 900;
       letter-spacing: 0.2px;
-    }
+        }
 
     .signal-method {
       font-size: 0.78rem;
@@ -498,7 +546,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 10px;
-    }
+        }
 
     .empty-state {
       text-align: center;
@@ -521,7 +569,7 @@
       display: grid;
       gap: 10px;
       width: min(420px, calc(100vw - 36px));
-    }
+        }
 
     .toast {
       border: 1px solid var(--stroke);
@@ -530,11 +578,11 @@
       border-radius: 16px;
       padding: 12px 12px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-      display: flex;
+            display: flex;
       justify-content: space-between;
       gap: 12px;
       align-items: start;
-    }
+        }
 
     .toast .title {
       font-weight: 900;
@@ -545,7 +593,7 @@
       color: var(--muted);
       margin-top: 4px;
       font-size: 0.86rem;
-    }
+        }
 
     .toast .x {
       border: 1px solid var(--stroke);
@@ -559,22 +607,22 @@
 
     /* Footer */
     footer {
-      text-align: center;
+            text-align: center;
       padding: 18px 12px;
       color: var(--muted);
       font-size: 0.85rem;
       margin-top: 16px;
     }
 
-    /* Responsive */
-    @media (max-width: 1100px) {
+        /* Responsive */
+        @media (max-width: 1100px) {
       .metrics-grid { grid-template-columns: repeat(3, 1fr); }
-      .grid-2 { grid-template-columns: 1fr; }
+            .grid-2 { grid-template-columns: 1fr; }
       .topbar { position: relative; top: 0; }
     }
 
     @media (max-width: 780px) {
-      .summary-bar { grid-template-columns: 1fr; }
+            .summary-bar { grid-template-columns: 1fr; }
       .metrics-grid { grid-template-columns: repeat(2, 1fr); }
       .topbar { flex-direction: column; align-items: stretch; }
       .topbar-actions { justify-content: flex-start; }
@@ -582,16 +630,16 @@
 
     @media (prefers-reduced-motion: reduce) {
       * { scroll-behavior: auto !important; transition: none !important; }
-    }
-  </style>
+        }
+    </style>
 </head>
 
 <body>
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
-  <div class="container">
+    <div class="container">
     <header class="topbar card">
       <div class="brand">
         <div class="brand-title">Unified Trading Dashboard</div>
@@ -618,80 +666,80 @@
         <button class="btn btn-danger" id="btn-reset" onclick="resetPortfolio()">🗑️ Reset</button>
         <button class="btn btn-ghost" id="btn-refresh-pairs" onclick="refreshPairs()" title="Refresh stock pairs (runs in background)">🧬 Refresh Pairs</button>
       </div>
-    </header>
+        </header>
 
-    <div class="summary-bar">
+        <div class="summary-bar">
       <div class="summary-card crypto card">
-        <div class="summary-label">₿ Crypto Portfolio</div>
-        <div class="summary-value" id="crypto-value">$10,000</div>
-        <div class="summary-pnl" id="crypto-pnl">+$0.00 (0.00%)</div>
-      </div>
+                <div class="summary-label">₿ Crypto Portfolio</div>
+                <div class="summary-value" id="crypto-value">$10,000</div>
+                <div class="summary-pnl" id="crypto-pnl">+$0.00 (0.00%)</div>
+            </div>
 
       <div class="summary-card stocks card">
-        <div class="summary-label">📈 Stocks Portfolio</div>
-        <div class="summary-value" id="stocks-value">$10,000</div>
-        <div class="summary-pnl" id="stocks-pnl">+$0.00 (0.00%)</div>
-      </div>
+                <div class="summary-label">📈 Stocks Portfolio</div>
+                <div class="summary-value" id="stocks-value">$10,000</div>
+                <div class="summary-pnl" id="stocks-pnl">+$0.00 (0.00%)</div>
+            </div>
 
       <div class="summary-card combined card">
-        <div class="summary-label">💰 Combined Total</div>
-        <div class="summary-value" id="combined-value">$20,000</div>
-        <div class="summary-pnl" id="combined-pnl">+$0.00 (0.00%)</div>
-      </div>
-    </div>
+                <div class="summary-label">💰 Combined Total</div>
+                <div class="summary-value" id="combined-value">$20,000</div>
+                <div class="summary-pnl" id="combined-pnl">+$0.00 (0.00%)</div>
+            </div>
+        </div>
 
-    <div class="tabs">
+        <div class="tabs">
       <button class="tab active crypto" type="button" data-market="crypto" onclick="switchTab('crypto')">₿ Crypto</button>
       <button class="tab stocks" type="button" data-market="stocks" onclick="switchTab('stocks')">📈 Stocks</button>
-    </div>
+        </div>
 
-    <div class="health-banner" id="health-banner">
+        <div class="health-banner" id="health-banner">
       <strong style="color: var(--bad);">Data is stale.</strong>
       Last update was <span id="stale-time">--</span> ago. Try “Force Update”.
-    </div>
+        </div>
 
-    <!-- Crypto Content -->
+        <!-- Crypto Content -->
     <section class="content active" id="content-crypto">
       <div class="metrics-grid">
         <div class="metric-card card">
           <div class="metric-label">TOTAL VALUE</div>
-          <div class="metric-value" id="crypto-total">$10,000</div>
-        </div>
+                    <div class="metric-value" id="crypto-total">$10,000</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">CASH</div>
           <div class="metric-value" id="crypto-cash" style="color: var(--good);">$10,000</div>
-        </div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">P&amp;L</div>
-          <div class="metric-value" id="crypto-pnl-detail">$0.00</div>
-        </div>
+                    <div class="metric-value" id="crypto-pnl-detail">$0.00</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">WIN RATE</div>
-          <div class="metric-value" id="crypto-winrate">0%</div>
-        </div>
+                    <div class="metric-value" id="crypto-winrate">0%</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">COMPLETED</div>
-          <div class="metric-value" id="crypto-trades">0</div>
-        </div>
-      </div>
+                    <div class="metric-value" id="crypto-trades">0</div>
+                </div>
+            </div>
 
-      <div class="grid-2">
+            <div class="grid-2">
         <div class="section card">
           <div class="section-title">
             <span>📍 Open Positions</span>
             <small id="crypto-positions-count">0</small>
           </div>
-          <div id="crypto-positions"><div class="empty-state">No open positions</div></div>
-        </div>
+                    <div id="crypto-positions"><div class="empty-state">No open positions</div></div>
+                </div>
 
         <div class="section card">
           <div class="section-title">
             <span>📜 Recent Trades</span>
-            <small>Last 5</small>
+            <small>Last 8</small>
           </div>
-          <div id="crypto-trades-list"><div class="empty-state">No trades yet</div></div>
-        </div>
-      </div>
+                    <div id="crypto-trades-list"><div class="empty-state">No trades yet</div></div>
+                </div>
+            </div>
 
       <div class="section card">
         <div class="section-title">
@@ -705,57 +753,57 @@
             </select>
           </div>
         </div>
-        <div class="signals-grid" id="crypto-signals"></div>
-      </div>
+                <div class="signals-grid" id="crypto-signals"></div>
+            </div>
 
       <div class="toolbar" style="justify-content: center; margin-top: 12px;">
         <span class="pill"><span class="dot" id="crypto-status-dot"></span><span id="crypto-status">Live</span></span>
         <span class="pill">🔄 Last: <strong id="crypto-last-update">--</strong></span>
-      </div>
+            </div>
     </section>
 
-    <!-- Stocks Content -->
+        <!-- Stocks Content -->
     <section class="content" id="content-stocks">
       <div class="metrics-grid">
         <div class="metric-card card">
           <div class="metric-label">TOTAL VALUE</div>
-          <div class="metric-value" id="stocks-total">$10,000</div>
-        </div>
+                    <div class="metric-value" id="stocks-total">$10,000</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">CASH</div>
           <div class="metric-value" id="stocks-cash" style="color: var(--good);">$10,000</div>
-        </div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">P&amp;L</div>
-          <div class="metric-value" id="stocks-pnl-detail">$0.00</div>
-        </div>
+                    <div class="metric-value" id="stocks-pnl-detail">$0.00</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">WIN RATE</div>
-          <div class="metric-value" id="stocks-winrate">0%</div>
-        </div>
+                    <div class="metric-value" id="stocks-winrate">0%</div>
+                </div>
         <div class="metric-card card">
           <div class="metric-label">COMPLETED</div>
-          <div class="metric-value" id="stocks-trades">0</div>
-        </div>
-      </div>
+                    <div class="metric-value" id="stocks-trades">0</div>
+                </div>
+            </div>
 
-      <div class="grid-2">
+            <div class="grid-2">
         <div class="section card">
           <div class="section-title">
             <span>📍 Open Positions</span>
             <small id="stocks-positions-count">0</small>
           </div>
-          <div id="stocks-positions"><div class="empty-state">No open positions</div></div>
-        </div>
+                    <div id="stocks-positions"><div class="empty-state">No open positions</div></div>
+                </div>
 
         <div class="section card">
           <div class="section-title">
             <span>📜 Recent Trades</span>
-            <small>Last 5</small>
+            <small>Last 8</small>
           </div>
-          <div id="stocks-trades-list"><div class="empty-state">No trades yet</div></div>
-        </div>
-      </div>
+                    <div id="stocks-trades-list"><div class="empty-state">No trades yet</div></div>
+                </div>
+            </div>
 
       <div class="section card">
         <div class="section-title">
@@ -769,16 +817,16 @@
             </select>
           </div>
         </div>
-        <div class="signals-grid" id="stocks-signals"></div>
-      </div>
+                <div class="signals-grid" id="stocks-signals"></div>
+            </div>
 
       <div class="toolbar" style="justify-content: center; margin-top: 12px;">
         <span class="pill"><span class="dot" id="stocks-status-dot"></span><span id="stocks-status">Live</span></span>
         <span class="pill">🔄 Last: <strong id="stocks-last-update">--</strong></span>
-      </div>
+            </div>
     </section>
 
-    <!-- Z-Score Chart Section -->
+        <!-- Z-Score Chart Section -->
     <section class="section card" style="margin-top: 14px;">
       <div class="section-title">
         <span>📈 Z-Score Monitor</span>
@@ -787,28 +835,28 @@
 
       <div class="toolbar" style="margin-bottom: 12px;">
         <select class="select" id="chart-market" onchange="updatePairOptions()">
-          <option value="crypto">₿ Crypto</option>
-          <option value="stocks">📈 Stocks</option>
-        </select>
+                    <option value="crypto">₿ Crypto</option>
+                    <option value="stocks">📈 Stocks</option>
+                </select>
 
         <select class="select" id="chart-pair" onchange="loadZscoreChart()" style="min-width: 180px;">
-          <option value="">Select a pair...</option>
-        </select>
+                    <option value="">Select a pair...</option>
+                </select>
 
         <span class="pill" id="chart-current-z" style="font-family: var(--mono);">Current Z: --</span>
-      </div>
+        </div>
 
       <div id="zscore-chart" style="width: 100%; height: 360px; background: rgba(0,0,0,0.18); border-radius: 18px;"></div>
     </section>
 
-    <footer>
+        <footer>
       <p>Paper Trading Simulation • Crypto: Cointegration + OLS • Stocks: Kalman Filter</p>
       <p>Not financial advice • Use at your own risk</p>
-    </footer>
-  </div>
+        </footer>
+    </div>
 
-  <script>
-    let currentMarket = 'crypto';
+    <script>
+        let currentMarket = 'crypto';
 
     const marketState = {
       crypto: { portfolio: null, trades: [], signals: [] },
@@ -882,7 +930,7 @@
       }[c]));
     }
 
-    function formatCurrency(value) {
+        function formatCurrency(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) return '--';
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value));
     }
@@ -898,14 +946,14 @@
       const d = new Date(isoString);
       if (Number.isNaN(d.getTime())) return String(isoString);
       return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    }
+        }
 
-    function formatTime(isoString) {
-      if (!isoString) return '--';
+        function formatTime(isoString) {
+            if (!isoString) return '--';
       const d = new Date(isoString);
       if (Number.isNaN(d.getTime())) return String(isoString);
       return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    }
+        }
 
     function badgeForAction(action) {
       const a = String(action || '').toUpperCase();
@@ -924,16 +972,16 @@
       if (v >= 2) return 'var(--bad)';
       if (v <= -2) return 'var(--good)';
       return 'var(--text)';
-    }
+        }
 
-    function switchTab(market) {
-      currentMarket = market;
-
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        function switchTab(market) {
+            currentMarket = market;
+            
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       const tab = document.querySelector(`.tab[data-market="${market}"]`);
       if (tab) tab.classList.add('active');
-
-      document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
       const section = document.getElementById(`content-${market}`);
       if (section) section.classList.add('active');
 
@@ -943,28 +991,28 @@
       // update global meta from last loaded state
       const p = marketState[market]?.portfolio;
       if (p) updateGlobalMetaFromPortfolio(market, p);
-    }
+        }
 
-    async function loadSummary() {
-      const res = await fetch('/api/summary');
-      const data = await res.json();
+        async function loadSummary() {
+            const res = await fetch('/api/summary');
+            const data = await res.json();
 
-      document.getElementById('crypto-value').textContent = formatCurrency(data.crypto.total_value);
-      const cryptoPnl = document.getElementById('crypto-pnl');
-      cryptoPnl.textContent = `${data.crypto.pnl >= 0 ? '+' : ''}${formatCurrency(data.crypto.pnl)} (${data.crypto.pnl_pct.toFixed(2)}%)`;
-      cryptoPnl.className = `summary-pnl ${data.crypto.pnl >= 0 ? 'positive' : 'negative'}`;
+            document.getElementById('crypto-value').textContent = formatCurrency(data.crypto.total_value);
+            const cryptoPnl = document.getElementById('crypto-pnl');
+            cryptoPnl.textContent = `${data.crypto.pnl >= 0 ? '+' : ''}${formatCurrency(data.crypto.pnl)} (${data.crypto.pnl_pct.toFixed(2)}%)`;
+            cryptoPnl.className = `summary-pnl ${data.crypto.pnl >= 0 ? 'positive' : 'negative'}`;
 
-      document.getElementById('stocks-value').textContent = formatCurrency(data.stocks.total_value);
-      const stocksPnl = document.getElementById('stocks-pnl');
-      stocksPnl.textContent = `${data.stocks.pnl >= 0 ? '+' : ''}${formatCurrency(data.stocks.pnl)} (${data.stocks.pnl_pct.toFixed(2)}%)`;
-      stocksPnl.className = `summary-pnl ${data.stocks.pnl >= 0 ? 'positive' : 'negative'}`;
+            document.getElementById('stocks-value').textContent = formatCurrency(data.stocks.total_value);
+            const stocksPnl = document.getElementById('stocks-pnl');
+            stocksPnl.textContent = `${data.stocks.pnl >= 0 ? '+' : ''}${formatCurrency(data.stocks.pnl)} (${data.stocks.pnl_pct.toFixed(2)}%)`;
+            stocksPnl.className = `summary-pnl ${data.stocks.pnl >= 0 ? 'positive' : 'negative'}`;
 
-      document.getElementById('combined-value').textContent = formatCurrency(data.combined.total_value);
-      const combinedPnl = document.getElementById('combined-pnl');
-      const combinedPnlPct = (data.combined.pnl / data.combined.initial) * 100;
-      combinedPnl.textContent = `${data.combined.pnl >= 0 ? '+' : ''}${formatCurrency(data.combined.pnl)} (${combinedPnlPct.toFixed(2)}%)`;
-      combinedPnl.className = `summary-pnl ${data.combined.pnl >= 0 ? 'positive' : 'negative'}`;
-    }
+            document.getElementById('combined-value').textContent = formatCurrency(data.combined.total_value);
+            const combinedPnl = document.getElementById('combined-pnl');
+            const combinedPnlPct = (data.combined.pnl / data.combined.initial) * 100;
+            combinedPnl.textContent = `${data.combined.pnl >= 0 ? '+' : ''}${formatCurrency(data.combined.pnl)} (${combinedPnlPct.toFixed(2)}%)`;
+            combinedPnl.className = `summary-pnl ${data.combined.pnl >= 0 ? 'positive' : 'negative'}`;
+        }
 
     function updateGlobalMetaFromPortfolio(market, portfolio) {
       const dot = document.getElementById('global-status-dot');
@@ -1109,7 +1157,7 @@
       const sorted = [...trades].sort((a, b) => new Date(a.time) - new Date(b.time));
       const closed = sorted.filter(t => String(t.action || '').toUpperCase() === 'CLOSE');
 
-      const display = (closed.length > 0 ? closed : sorted).slice(-5).reverse();
+      const display = (closed.length > 0 ? closed : sorted).slice(-8).reverse();
       const header = closed.length > 0
         ? ''
         : '<div class="empty-state" style="margin-bottom: 10px;">No completed trades yet — showing latest trade activity</div>';
@@ -1125,14 +1173,77 @@
         const pnlText = pnl !== null && pnl !== undefined ? `${Number(pnl) >= 0 ? '+' : ''}${formatCurrency(pnl)}` : '--';
         const action = t.action || t.type || t.trade_type || '—';
         const reason = t.close_reason || '';
+        const isClose = String(action).toUpperCase() === 'CLOSE';
+        
+        // Get prices
+        const p1 = t.price1 ?? t.prices?.price1;
+        const p2 = t.price2 ?? t.prices?.price2;
+        const hr = t.hedge_ratio ? Number(t.hedge_ratio).toFixed(2) : '--';
+        
+        // Format prices
+        const price1Str = p1 !== undefined && p1 !== null ? `$${Number(p1).toFixed(2)}` : '--';
+        const price2Str = p2 !== undefined && p2 !== null ? `$${Number(p2).toFixed(2)}` : '--';
+        
+        // Position size for opens
+        const posSize = t.position_value ? formatCurrency(t.position_value) : '--';
+        
+        // Return percentage for closes
+        const returnPct = t.return_pct !== undefined && t.return_pct !== null 
+          ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` 
+          : '';
+        
+        // Z-score at trade
+        const zScore = t.zscore !== undefined ? Number(t.zscore).toFixed(2) : '--';
+        const entryZ = t.entry_zscore !== undefined ? Number(t.entry_zscore).toFixed(2) : '--';
+
+        // Build details based on trade type
+        let detailsHtml = '';
+        if (isClose) {
+          detailsHtml = `
+            <div class="trade-details">
+              <div class="trade-detail-row">
+                <span class="trade-label">Exit Prices:</span>
+                <span class="trade-value">${price1Str} / ${price2Str}</span>
+              </div>
+              <div class="trade-detail-row">
+                <span class="trade-label">Entry Z → Exit Z:</span>
+                <span class="trade-value">${entryZ} → ${zScore}</span>
+              </div>
+              ${returnPct ? `<div class="trade-detail-row">
+                <span class="trade-label">Return:</span>
+                <span class="trade-value ${pnlClass}">${returnPct}</span>
+              </div>` : ''}
+            </div>
+          `;
+        } else {
+          // OPEN trade
+          detailsHtml = `
+            <div class="trade-details">
+              <div class="trade-detail-row">
+                <span class="trade-label">Position Size:</span>
+                <span class="trade-value">${posSize}</span>
+              </div>
+              <div class="trade-detail-row">
+                <span class="trade-label">Entry Prices:</span>
+                <span class="trade-value">${price1Str} / ${price2Str}</span>
+              </div>
+              <div class="trade-detail-row">
+                <span class="trade-label">Entry Z-Score:</span>
+                <span class="trade-value" style="color: ${zColor(Number(t.zscore))}">${zScore}</span>
+              </div>
+            </div>
+          `;
+        }
 
         return `
-          <div class="list-item">
-            <div>
+          <div class="list-item trade-item">
+            <div class="trade-header">
               <div class="item-pair">${escapeHtml(t.pair || '')}</div>
-              <div class="subtext">${formatDateTime(t.time)} • ${badgeForAction(action)}${reason ? ` <span style="margin-left: 8px;">${escapeHtml(reason)}</span>` : ''}</div>
+              ${badgeForAction(action)}
+              <div class="item-value ${pnlClass}" style="margin-left: auto;">${isClose ? pnlText : ''}</div>
             </div>
-            <div class="item-value ${pnlClass}">${pnlText}</div>
+            <div class="trade-time">${formatDateTime(t.time)}${reason ? ` • ${escapeHtml(reason)}` : ''}</div>
+            ${detailsHtml}
           </div>
         `;
       }).join('');
@@ -1183,78 +1294,78 @@
       document.getElementById('zscore-chart').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    async function loadMarketData(market) {
-      const res = await fetch(`/api/portfolio/${market}`);
-      const data = await res.json();
+        async function loadMarketData(market) {
+            const res = await fetch(`/api/portfolio/${market}`);
+            const data = await res.json();
 
       marketState[market].portfolio = data;
       marketState[market].signals = data.signals || [];
 
-      const prefix = market;
+            const prefix = market;
 
-      // Metrics
-      document.getElementById(`${prefix}-total`).textContent = formatCurrency(data.total_value);
-      document.getElementById(`${prefix}-cash`).textContent = formatCurrency(data.cash);
+            // Metrics
+            document.getElementById(`${prefix}-total`).textContent = formatCurrency(data.total_value);
+            document.getElementById(`${prefix}-cash`).textContent = formatCurrency(data.cash);
 
-      const pnlEl = document.getElementById(`${prefix}-pnl-detail`);
-      pnlEl.textContent = `${data.pnl >= 0 ? '+' : ''}${formatCurrency(data.pnl)} (${data.pnl_pct.toFixed(2)}%)`;
-      pnlEl.className = `metric-value ${data.pnl >= 0 ? 'positive' : 'negative'}`;
+            const pnlEl = document.getElementById(`${prefix}-pnl-detail`);
+            pnlEl.textContent = `${data.pnl >= 0 ? '+' : ''}${formatCurrency(data.pnl)} (${data.pnl_pct.toFixed(2)}%)`;
+            pnlEl.className = `metric-value ${data.pnl >= 0 ? 'positive' : 'negative'}`;
 
-      document.getElementById(`${prefix}-winrate`).textContent = `${data.win_rate.toFixed(1)}%`;
-      document.getElementById(`${prefix}-trades`).textContent = data.closed_trades;
+            document.getElementById(`${prefix}-winrate`).textContent = `${data.win_rate.toFixed(1)}%`;
+            document.getElementById(`${prefix}-trades`).textContent = data.closed_trades;
 
       // Status pills
-      const statusDot = document.getElementById(`${prefix}-status-dot`);
-      const statusText = document.getElementById(`${prefix}-status`);
-      if (data.is_stale) {
-        statusDot.classList.add('stale');
+            const statusDot = document.getElementById(`${prefix}-status-dot`);
+            const statusText = document.getElementById(`${prefix}-status`);
+            if (data.is_stale) {
+                statusDot.classList.add('stale');
         statusText.textContent = 'STALE';
-      } else {
-        statusDot.classList.remove('stale');
-        statusText.textContent = 'Live';
-      }
-      document.getElementById(`${prefix}-last-update`).textContent = formatTime(data.last_update);
+            } else {
+                statusDot.classList.remove('stale');
+                statusText.textContent = 'Live';
+            }
+            document.getElementById(`${prefix}-last-update`).textContent = formatTime(data.last_update);
 
       // Global meta uses the active tab portfolio
       if (market === currentMarket) {
         updateGlobalMetaFromPortfolio(market, data);
-      }
+            }
 
       // Positions, Signals
       renderPositions(market);
       renderSignals(market);
 
       // Trades
-      const tradesRes = await fetch(`/api/trades/${market}`);
-      const trades = await tradesRes.json();
+            const tradesRes = await fetch(`/api/trades/${market}`);
+            const trades = await tradesRes.json();
       marketState[market].trades = trades || [];
       renderTrades(market);
 
       // Chart pairs
       updatePairOptions().catch(() => {});
-    }
+        }
 
-    async function loadAllData() {
+        async function loadAllData() {
       try {
         // Pair universe once (for full dropdown population)
         await loadPairUniverse();
-        await loadSummary();
-        await loadMarketData('crypto');
-        await loadMarketData('stocks');
+            await loadSummary();
+            await loadMarketData('crypto');
+            await loadMarketData('stocks');
       } catch (e) {
         showToast('Dashboard error', String(e), 'error');
       }
-    }
+        }
 
-    async function forceUpdate() {
+        async function forceUpdate() {
       const btn = document.getElementById('btn-force');
       btn.disabled = true;
       const prev = btn.textContent;
       btn.textContent = 'Updating…';
 
       try {
-        await fetch(`/api/update/${currentMarket}`);
-        await loadAllData();
+            await fetch(`/api/update/${currentMarket}`);
+            await loadAllData();
         showToast('Update complete', `${currentMarket.toUpperCase()} refreshed`, 'success');
       } catch (e) {
         showToast('Update failed', String(e), 'error');
@@ -1262,9 +1373,9 @@
         btn.textContent = prev;
         btn.disabled = false;
       }
-    }
+        }
 
-    async function resetPortfolio() {
+        async function resetPortfolio() {
       if (!confirm(`Reset ${currentMarket.toUpperCase()} portfolio? All trades will be lost.`)) return;
 
       const btn = document.getElementById('btn-reset');
@@ -1273,8 +1384,8 @@
       btn.textContent = 'Resetting…';
 
       try {
-        await fetch(`/api/reset/${currentMarket}`);
-        await loadAllData();
+                await fetch(`/api/reset/${currentMarket}`);
+                await loadAllData();
         showToast('Portfolio reset', `${currentMarket.toUpperCase()} cleared`, 'warn');
       } catch (e) {
         showToast('Reset failed', String(e), 'error');
@@ -1297,14 +1408,14 @@
       } catch (e) {
         showToast('Pair refresh failed', String(e), 'error');
       }
-    }
+        }
 
-    async function loadZscoreChart() {
-      const market = document.getElementById('chart-market').value;
-      const pair = document.getElementById('chart-pair').value;
-
-      if (!pair) {
-        Plotly.newPlot('zscore-chart', [], {
+        async function loadZscoreChart() {
+            const market = document.getElementById('chart-market').value;
+            const pair = document.getElementById('chart-pair').value;
+            
+            if (!pair) {
+                Plotly.newPlot('zscore-chart', [], {
           paper_bgcolor: 'rgba(0,0,0,0)',
           plot_bgcolor: 'rgba(0,0,0,0)',
           font: { color: 'rgba(255,255,255,0.55)' },
@@ -1313,60 +1424,60 @@
           yaxis: { gridcolor: 'rgba(255,255,255,0.08)', range: [-4, 4] }
         }, { responsive: true });
         document.getElementById('chart-current-z').textContent = 'Current Z: --';
-        return;
-      }
+                return;
+            }
 
       document.getElementById('chart-current-z').textContent = 'Loading…';
 
-      try {
-        const res = await fetch(`/api/zscore_history/${market}/${pair}`);
-        const data = await res.json();
-        if (data.error) {
+            try {
+                const res = await fetch(`/api/zscore_history/${market}/${pair}`);
+                const data = await res.json();
+                if (data.error) {
           showToast('Chart error', data.error, 'error');
-          return;
-        }
+                    return;
+                }
 
-        const dates = data.data.map(d => d.date);
-        const zscores = data.data.map(d => d.zscore);
+                const dates = data.data.map(d => d.date);
+                const zscores = data.data.map(d => d.zscore);
         const entry = (data.entry_threshold !== undefined && data.entry_threshold !== null) ? data.entry_threshold : 2;
 
-        const zscore_trace = {
-          x: dates,
-          y: zscores,
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Z-Score',
+                const zscore_trace = {
+                    x: dates,
+                    y: zscores,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Z-Score',
           line: { color: '#5aa6ff', width: 2 },
-        };
+                };
 
-        const upper_threshold = {
-          x: dates,
+                const upper_threshold = {
+                    x: dates,
           y: dates.map(() => entry),
-          type: 'scatter',
-          mode: 'lines',
+                    type: 'scatter',
+                    mode: 'lines',
           name: `SELL (+${entry})`,
           line: { color: '#ff4d67', width: 2, dash: 'dash' },
-        };
+                };
 
-        const lower_threshold = {
-          x: dates,
+                const lower_threshold = {
+                    x: dates,
           y: dates.map(() => -entry),
-          type: 'scatter',
-          mode: 'lines',
+                    type: 'scatter',
+                    mode: 'lines',
           name: `BUY (-${entry})`,
           line: { color: '#20f5a6', width: 2, dash: 'dash' },
-        };
+                };
 
-        const zero_line = {
-          x: dates,
-          y: dates.map(() => 0),
-          type: 'scatter',
-          mode: 'lines',
-          name: 'Mean',
+                const zero_line = {
+                    x: dates,
+                    y: dates.map(() => 0),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Mean',
           line: { color: 'rgba(255,255,255,0.35)', width: 1, dash: 'dot' },
-        };
+                };
 
-        const layout = {
+                const layout = {
           paper_bgcolor: 'rgba(0,0,0,0)',
           plot_bgcolor: 'rgba(0,0,0,0)',
           font: { color: 'rgba(255,255,255,0.85)', family: 'Outfit, sans-serif' },
@@ -1375,25 +1486,25 @@
           yaxis: { gridcolor: 'rgba(255,255,255,0.08)', range: [-4, 4], title: 'Z-Score' },
           legend: { orientation: 'h', y: -0.2 },
           showlegend: true,
-        };
+                };
 
         Plotly.newPlot('zscore-chart', [zscore_trace, upper_threshold, lower_threshold, zero_line], layout, { responsive: true });
 
-        const currentZ = data.current_zscore;
+                const currentZ = data.current_zscore;
         const el = document.getElementById('chart-current-z');
         el.textContent = `Current Z: ${Number(currentZ).toFixed(2)}`;
         el.style.color = currentZ > entry ? 'var(--bad)' : (currentZ < -entry ? 'var(--good)' : 'var(--text)');
 
       } catch (e) {
         showToast('Chart error', String(e), 'error');
-      }
-    }
+            }
+        }
 
     // Boot
     document.getElementById('btn-refresh-pairs').style.display = 'none';
     loadPairUniverse().then(() => updatePairOptions()).catch(() => {});
-    loadAllData();
-    setInterval(loadAllData, 30000);
-  </script>
+        loadAllData();
+        setInterval(loadAllData, 30000);
+    </script>
 </body>
 </html>
