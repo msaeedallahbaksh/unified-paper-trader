@@ -1169,13 +1169,17 @@
       const tradesEl = document.getElementById(`${prefix}-trades-list`);
 
       const trades = marketState[market]?.trades || [];
-      const sorted = [...trades].sort((a, b) => new Date(a.time) - new Date(b.time));
+      const sorted = [...trades].sort((a, b) => new Date(b.time) - new Date(a.time)); // newest first
       const closed = sorted.filter(t => String(t.action || '').toUpperCase() === 'CLOSE');
+      const opens = sorted.filter(t => String(t.action || '').toUpperCase() !== 'CLOSE');
 
-      const display = (closed.length > 0 ? closed : sorted).slice(-8).reverse();
-      const header = closed.length > 0
-        ? ''
-        : '<div class="empty-state" style="margin-bottom: 10px;">No completed trades yet — showing latest trade activity</div>';
+      // Show closed trades first, then open trades if no closed
+      const display = closed.length > 0 ? closed.slice(0, 8) : opens.slice(0, 8);
+      
+      let header = '';
+      if (closed.length === 0 && opens.length > 0) {
+        header = '<div class="empty-state" style="margin-bottom: 10px; font-size: 0.8rem;">No closed trades yet — showing open positions</div>';
+      }
 
       if (display.length === 0) {
         tradesEl.innerHTML = '<div class="empty-state">No trades yet</div>';
@@ -1190,12 +1194,15 @@
         const reason = t.close_reason || '';
         const isClose = String(action).toUpperCase() === 'CLOSE';
         
+        // Parse pair to get asset names
+        const pairStr = t.pair || '';
+        const [asset1, asset2] = pairStr.includes('-') ? pairStr.split('-') : [pairStr, ''];
+        
         // Get prices
         const p1 = t.price1 ?? t.prices?.price1;
         const p2 = t.price2 ?? t.prices?.price2;
-        const hr = t.hedge_ratio ? Number(t.hedge_ratio).toFixed(2) : '--';
         
-        // Format prices
+        // Format prices with asset names
         const price1Str = p1 !== undefined && p1 !== null ? `$${Number(p1).toFixed(2)}` : '--';
         const price2Str = p2 !== undefined && p2 !== null ? `$${Number(p2).toFixed(2)}` : '--';
         
@@ -1214,24 +1221,29 @@
         // Build details based on trade type
         let detailsHtml = '';
         if (isClose) {
+          // CLOSED trade - show exit info and profit
           detailsHtml = `
             <div class="trade-details">
               <div class="trade-detail-row">
                 <span class="trade-label">Exit Prices:</span>
-                <span class="trade-value">${price1Str} / ${price2Str}</span>
+                <span class="trade-value">${asset1}: ${price1Str} | ${asset2}: ${price2Str}</span>
               </div>
               <div class="trade-detail-row">
-                <span class="trade-label">Entry Z → Exit Z:</span>
+                <span class="trade-label">Z-Score:</span>
                 <span class="trade-value">${entryZ} → ${zScore}</span>
               </div>
               ${returnPct ? `<div class="trade-detail-row">
                 <span class="trade-label">Return:</span>
                 <span class="trade-value ${pnlClass}">${returnPct}</span>
               </div>` : ''}
+              <div class="trade-detail-row">
+                <span class="trade-label">P&L:</span>
+                <span class="trade-value ${pnlClass}" style="font-weight: 600;">${pnlText}</span>
+              </div>
             </div>
           `;
         } else {
-          // OPEN trade
+          // OPEN trade - show entry info, still holding
           detailsHtml = `
             <div class="trade-details">
               <div class="trade-detail-row">
@@ -1239,12 +1251,16 @@
                 <span class="trade-value">${posSize}</span>
               </div>
               <div class="trade-detail-row">
-                <span class="trade-label">Entry Prices:</span>
-                <span class="trade-value">${price1Str} / ${price2Str}</span>
+                <span class="trade-label">Bought At:</span>
+                <span class="trade-value">${asset1}: ${price1Str} | ${asset2}: ${price2Str}</span>
               </div>
               <div class="trade-detail-row">
                 <span class="trade-label">Entry Z-Score:</span>
                 <span class="trade-value" style="color: ${zColor(Number(t.zscore))}">${zScore}</span>
+              </div>
+              <div class="trade-detail-row">
+                <span class="trade-label">Status:</span>
+                <span class="trade-value" style="color: var(--warn);">Holding — Not Sold Yet</span>
               </div>
             </div>
           `;
